@@ -282,6 +282,7 @@ class ClientFeatures(NamedTuple):
     max_upload_size: int = 0
     max_control_layers: int = 1000
     wave_speed: bool = False
+    gguf: bool = False
 
 
 class Client(ABC):
