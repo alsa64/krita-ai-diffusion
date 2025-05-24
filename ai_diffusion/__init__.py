@@ -1,6 +1,6 @@
 """Generative AI plugin for Krita, Hires edition"""
 
-__version__ = "R1.0 Hires (forked from 1.34.0)"
+__version__ = "R1.0 Hires (forked from 1.35.0)"
 
 import importlib.util
 
