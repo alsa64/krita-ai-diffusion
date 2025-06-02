@@ -25,7 +25,8 @@ generation **Progress Preview**;
 
 and a number of various **QoL improvements** & fixes, including a [**fix**](https://github.com/minsky91/krita-ai-diffusion/wiki/5.-Hiresfix-Guidance:-a-few-examples#fixing-hiresfix-for-flux) **for the infamous Flux screen pattern** artifact for resolutions higher than the checkpoint’s native.
 
-![][image1]  
+![Krita AI Hires tab options](https://github.com/user-attachments/assets/7c482251-b4b7-4b73-95c4-eab458f6b78a)
+ 
    
 This release (a github *fork* from [Krita AI Diffusion](https://github.com/Acly/krita-ai-diffusion) by Acly) is a product of my extensive 1.5 year-long acquaintance with this amazing tool and, a bit later, with its sources. I find it an unparalleled work in the whole Stable Diffusion field and I wish we had more of such tools to cover various use cases. 
 
