@@ -60,7 +60,7 @@ ren ai\_diffusion\_baseline ai\_diffusion
 ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes" "comfyui-tooling-nodes\_hires"  
 ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes\_baseline" "comfyui-tooling-nodes"
 
-7. In the pykrita folder, make a copy of ai\_diffusion.desktop with the extension ‘desktop\_hires’ and change line 7 to ‘’Name=AI Image Diffusion Hires’.  
+7. In the pykrita folder, make a copy of ai\_diffusion.desktop with the extension ‘desktop\_hires’ and change line 7 to ’Name=AI Image Diffusion Hires’.  
 8. Run to\_hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to\_baseline.bat) and *restart both* the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it. 
 
 For instructions on removing cappings on image resolution in the plugin and Comfy server, [click here](https://github.com/minsky91/krita-ai-diffusion/wiki/6.-How-to-remove-size-cappings-on-high-resolution-images-in-ComfyUI-and-Krita-AI). That will allow you to process files of resolutions as high as 24K \- *if* your GPU hardware is up to the task, naturally.
