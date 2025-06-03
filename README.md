@@ -54,8 +54,8 @@ At the moment, there is no automatic installation or update routine like impleme
 `ren ai_diffusion ai_diffusion_baseline`  
 `ren ai_diffusion_hires ai_diffusion`  
 
-`ren "C:\AI\StabilityMatrix\Packages\ComfyUI\custom_nodes\comfyui-tooling-nodes" "comfyui-tooling-nodes_baseline"`    
-`ren "C:\AI\StabilityMatrix\Packages\ComfyUI\custom_nodes\comfyui-tooling-nodes_hires" "comfyui-tooling-nodes"`  
+`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom_nodes\\comfyui-tooling-nodes" "comfyui-tooling-nodes_baseline"`    
+`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom_nodes\\comfyui-tooling-nodes_hires" "comfyui-tooling-nodes"`  
 
 ***to\_baseline.bat***  
 `ren ai_diffusion.desktop ai_diffusion.desktop_hires`  
@@ -63,8 +63,8 @@ At the moment, there is no automatic installation or update routine like impleme
 `ren ai_diffusion ai_diffusion_hires`   
 `ren ai_diffusion_baseline ai_diffusion`
 
-`ren "C:\AI\StabilityMatrix\Packages\ComfyUI\custom_nodes\comfyui-tooling-nodes" "comfyui-tooling-nodes_hires"`  
-`ren "C:\AI\StabilityMatrix\Packages\ComfyUI\custom_nodes\comfyui-tooling-nodes_baseline" "comfyui-tooling-nodes"`
+`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom_nodes\\comfyui-tooling-nodes" "comfyui-tooling-nodes_hires"`  
+`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom_nodes\\comfyui-tooling-nodes_baseline" "comfyui-tooling-nodes"`
 
 7. In the pykrita folder, make a copy of ai\_diffusion.desktop with the extension ‘desktop\_hires’ and change line 7 to ’Name=AI Image Diffusion Hires’.  
 8. Run to\_hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to\_baseline.bat) and *restart both* the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it. 
