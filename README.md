@@ -73,49 +73,50 @@ For instructions on removing cappings on image resolution in the plugin and Comf
 
 ### Example of metadata saved in a file, full verbosity mode:
 
-a serene landscape with forest and mountains on the horizon, a  colored illustration  
-Negative prompt:     
-Steps: 10  
-Sampler: Euler a (Hyper)  
-Schedule type: Normal  
-CFG scale: 3.0  
-Seed: 1105287894  
-Model: art\\dynavisionXLAllInOneStylized\_releaseV0610Bakedvae.safetensors (SD XL)  
-Denoising strength: 1.0  
-Style Preset: Hyper with Lora  
-Style Preset filename: style-5.json  
-LoRas: LCM-Hyper\\Hyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0   
-Rescale CFG: 0.7  
-Canvas resolution: 8192x6144 pixels  
-Output resolution: 8192x6144 pixels  
-Region 1: prompt \<background\>  
-Region 2: prompt \<a forest hut\>, resolution 3108x2696  
-Region 3: prompt \<a mountain river\>, resolution 3851x2856  
-Region 4: prompt \<a forest meadow \>, resolution 5207x1473  
-Region 5: prompt \<an elderly forester man is walking to his forest hut, carrying a heavy bundle of woodsticks on his back\>, resolution 1656x2680  
-Models used: xinsirtile-sdxl-1.0.safetensors (ControlNet)  
-               4x\_NMKD-Superscale-SP\_178000\_G.pth (Upscale or Inpaint model)
+`a serene landscape with forest and mountains on the horizon, a  colored illustration`  
+`Negative prompt:`     
+`Steps: 10`  
+`Sampler: Euler a (Hyper)`    
+`Schedule type: Normal`  
+`CFG scale: 3.0`  
+`Seed: 1105287894`    
+`Model: art\\dynavisionXLAllInOneStylized\_releaseV0610Bakedvae.safetensors (SD XL)`  
+`Denoising strength: 1.0`  
+`Style Preset: Hyper with Lora`    
+`Style Preset filename: style-5.json`    
+`LoRas: LCM-Hyper\\Hyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0`   
+`Rescale CFG: 0.7`  
+`Canvas resolution: 8192x6144 pixels`    
+`Output resolution: 8192x6144 pixels`    
+`Region 1: prompt \<background\>`  
+`Region 2: prompt \<a forest hut\>, resolution 3108x2696`  
+`Region 3: prompt \<a mountain river\>, resolution 3851x2856`  
+`Region 4: prompt \<a forest meadow \>, resolution 5207x1473`  
+`Region 5: prompt \<an elderly forester man is walking to his forest hut, carrying a heavy bundle of woodsticks on his back\>, resolution 1656x2680`  
+`Models used: xinsirtile-sdxl-1.0.safetensors (ControlNet)`  
+`               4x\_NMKD-Superscale-SP\_178000\_G.pth (Upscale or Inpaint model)`
 
-Generation stats:  
-6 cached input image(s) of 0x0 pixels  
-Preparation time: 3.91 sec.  
-Workflow size: 0.05 MB, 59 nodes  
-Workflow upload time: 0.14 sec.  
-Output files total size: 53.43 MB in 1 PNG image(s) of 8192x6144 pixels  
-Output files download time: 3.28 sec.  
-Execution time: 164.7 sec.  
-Total active time: 168.6 sec.  
-Total lifetime: 353.2 sec.  
-Batch size: 3
+`Generation stats:`  
+`6 cached input image(s) of 0x0 pixels`  
+`Preparation time: 3.91 sec.`  
+`Workflow size: 0.05 MB, 59 nodes`  
+`Workflow upload time: 0.14 sec.`  
+`Output files total size: 53.43 MB in 1 PNG image(s) of 8192x6144 pixels`  
+`Output files download time: 3.28 sec.`  
+`Execution time: 164.7 sec.`  
+`Total active time: 168.6 sec.`  
+`Total lifetime: 353.2 sec.`  
+`Batch size: 3`
 
-System info:  
-os: nt  
-ram\_total: 32 GB  
-ram\_free: 23.1 GB  
-comfyui\_version: 0.3.19  
-python\_version: 3.10.11   
-pytorch\_version: 2.6.0+cu124  
-GPU device features:  
-name: cuda:0 NVIDIA GeForce RTX 4070 Ti SUPER  
-vram\_total: 16 GB  
-vram\_free: 14.7 GB
+`System info:`  
+`os: nt`  
+`ram\_total: 32 GB`  
+`ram\_free: 23.1 GB`  
+`comfyui\_version: 0.3.19`  
+`python\_version: 3.10.11`   
+`pytorch\_version: 2.6.0+cu124`  
+`GPU device features:`  
+`name: cuda:0 NVIDIA GeForce RTX 4070 Ti SUPER`  
+`vram\_total: 16 GB`  
+`vram\_free: 14.7 GB`
+
