@@ -80,11 +80,11 @@ For instructions on removing cappings on image resolution in the plugin and Comf
 `Schedule type: Normal`  
 `CFG scale: 3.0`  
 `Seed: 1105287894`    
-`Model: artdynavisionXLAllInOneStylized_releaseV0610Bakedvae.safetensors (SD XL)`  
+`Model: art\dynavisionXLAllInOneStylized_releaseV0610Bakedvae.safetensors (SD XL)`  
 `Denoising strength: 1.0`  
 `Style Preset: Hyper with Lora`    
 `Style Preset filename: style-5.json`    
-`LoRas: LCM-HyperHyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0`   
+`LoRas: LCM-Hyper\Hyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0`   
 `Rescale CFG: 0.7`  
 `Canvas resolution: 8192x6144 pixels`    
 `Output resolution: 8192x6144 pixels`    
