@@ -49,22 +49,22 @@ At the moment, there is no automatic installation or update routine like impleme
 6. Create **2 simple batch files** (shell scripts in Linux) to switch between the two versions named to\_hires.bat and to\_baseline.bat and place them in the pykrita folder just above ai\_diffusion. Here are batch files from my system, to be used as a template:
 
 ***to\_hires.bat***  
-`ren ai\_diffusion.desktop ai\_diffusion.desktop\_baseline`  
-`ren ai\_diffusion.desktop\_hires ai\_diffusion.desktop`  
-`ren ai\_diffusion ai\_diffusion\_baseline`  
-`ren ai\_diffusion\_hires ai\_diffusion`  
+`ren ai_diffusion.desktop ai_diffusion.desktop_baseline`  
+`ren ai_diffusion.desktop_hires ai_diffusion.desktop`  
+`ren ai_diffusion ai_diffusion_baseline`  
+`ren ai_diffusion_hires ai_diffusion`  
 
-`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes" "comfyui-tooling-nodes\_baseline"`    
-`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes\_hires" "comfyui-tooling-nodes"`  
+`ren "C:AIStabilityMatrixPackagesComfyUIcustom_nodescomfyui-tooling-nodes" "comfyui-tooling-nodes_baseline"`    
+`ren "C:AIStabilityMatrixPackagesComfyUIcustom_nodescomfyui-tooling-nodes_hires" "comfyui-tooling-nodes"`  
 
 ***to\_baseline.bat***  
-`ren ai\_diffusion.desktop ai\_diffusion.desktop\_hires`  
-`ren ai\_diffusion.desktop\_baseline ai\_diffusion.desktop`    
-`ren ai\_diffusion ai\_diffusion\_hires`   
-`ren ai\_diffusion\_baseline ai\_diffusion`
+`ren ai_diffusion.desktop ai_diffusion.desktop_hires`  
+`ren ai_diffusion.desktop_baseline ai_diffusion.desktop`    
+`ren ai_diffusion ai_diffusion_hires`   
+`ren ai_diffusion_baseline ai_diffusion`
 
-`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes" "comfyui-tooling-nodes\_hires"`  
-`ren "C:\\AI\\StabilityMatrix\\Packages\\ComfyUI\\custom\_nodes\\comfyui-tooling-nodes\_baseline" "comfyui-tooling-nodes"`
+`ren "C:AIStabilityMatrixPackagesComfyUIcustom_nodescomfyui-tooling-nodes" "comfyui-tooling-nodes_hires"`  
+`ren "C:AIStabilityMatrixPackagesComfyUIcustom_nodescomfyui-tooling-nodes_baseline" "comfyui-tooling-nodes"`
 
 7. In the pykrita folder, make a copy of ai\_diffusion.desktop with the extension ‘desktop\_hires’ and change line 7 to ’Name=AI Image Diffusion Hires’.  
 8. Run to\_hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to\_baseline.bat) and *restart both* the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it. 
