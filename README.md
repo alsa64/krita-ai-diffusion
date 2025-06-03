@@ -114,9 +114,29 @@ For instructions on removing cappings on image resolution in the plugin and Comf
 `ram\_free: 23.1 GB`  
 `comfyui\_version: 0.3.19`  
 `python\_version: 3.10.11`   
+
 `pytorch\_version: 2.6.0+cu124`  
 `GPU device features:`  
 `name: cuda:0 NVIDIA GeForce RTX 4070 Ti SUPER`  
 `vram\_total: 16 GB`  
 `vram\_free: 14.7 GB`
+
+# Examples of images upscaled, refined and inpainted with Krita AI Hires
+
+3250x3900
+![The snow globe infinity 95% jpgq](https://github.com/user-attachments/assets/b2fc4095-7dbb-45a5-88c8-c132c510120f)
+
+3840x4608
+![Wrong Shoes](https://github.com/user-attachments/assets/57a694d1-38df-4a43-a0d7-241512ed03a4)
+
+4096x4864
+![Made in Europe 90% jq](https://github.com/user-attachments/assets/85f904cf-b0e0-4e26-b566-36ccece5ebe9)
+
+4000x4800
+![Kiss encore scene 1 Hires](https://github.com/user-attachments/assets/9cda7369-7997-46df-ba14-c53121822a31)
+
+6528x7840
+![The alien artefact](https://github.com/user-attachments/assets/b44df65e-5db7-4c4c-be81-ce59130ac354)
+
+
 
