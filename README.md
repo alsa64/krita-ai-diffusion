@@ -69,7 +69,7 @@ At the moment, there is no automatic installation or update routine like impleme
 7. In the pykrita folder, make a copy of ai\_diffusion.desktop with the extension ‘desktop\_hires’ and change line 7 to ’Name=AI Image Diffusion Hires’.  
 8. Run to\_hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to\_baseline.bat) and *restart both* the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it. 
 
-For instructions on removing cappings on image resolution in the plugin and Comfy server, [click here](https://github.com/minsky91/krita-ai-diffusion/wiki/6.-How-to-remove-size-cappings-on-high-resolution-images-in-ComfyUI-and-Krita-AI). That will allow you to process files of resolutions as high as 24K \- *if* your GPU hardware is up to the task, naturally.
+For instructions on removing cappings on image resolution in the plugin and Comfy server, [click here](https://github.com/minsky91/krita-ai-diffusion/wiki/6.-How-to-remove-size-cappings-on-high-resolution-images-in-ComfyUI-and-Krita-AI). That will allow you to process files of resolutions as high as **24K** \- *if* your GPU hardware is up to the task, naturally.
 
 ### Example of metadata saved in a file, full verbosity mode:
 
@@ -80,21 +80,21 @@ For instructions on removing cappings on image resolution in the plugin and Comf
 `Schedule type: Normal`  
 `CFG scale: 3.0`  
 `Seed: 1105287894`    
-`Model: art\\dynavisionXLAllInOneStylized\_releaseV0610Bakedvae.safetensors (SD XL)`  
+`Model: artdynavisionXLAllInOneStylized_releaseV0610Bakedvae.safetensors (SD XL)`  
 `Denoising strength: 1.0`  
 `Style Preset: Hyper with Lora`    
 `Style Preset filename: style-5.json`    
-`LoRas: LCM-Hyper\\Hyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0`   
+`LoRas: LCM-HyperHyper-SDXL-12steps-CFG-lora.safetensors: strength 1.0`   
 `Rescale CFG: 0.7`  
 `Canvas resolution: 8192x6144 pixels`    
 `Output resolution: 8192x6144 pixels`    
-`Region 1: prompt \<background\>`  
-`Region 2: prompt \<a forest hut\>, resolution 3108x2696`  
-`Region 3: prompt \<a mountain river\>, resolution 3851x2856`  
-`Region 4: prompt \<a forest meadow \>, resolution 5207x1473`  
-`Region 5: prompt \<an elderly forester man is walking to his forest hut, carrying a heavy bundle of woodsticks on his back\>, resolution 1656x2680`  
+`Region 1: prompt <background>`  
+`Region 2: prompt <a forest hut>, resolution 3108x2696`  
+`Region 3: prompt <a mountain river>, resolution 3851x2856`  
+`Region 4: prompt <a forest meadow >, resolution 5207x1473`  
+`Region 5: prompt <an elderly forester man is walking to his forest hut, carrying a heavy bundle of woodsticks on his back>, resolution 1656x2680`  
 `Models used: xinsirtile-sdxl-1.0.safetensors (ControlNet)`  
-`               4x\_NMKD-Superscale-SP\_178000\_G.pth (Upscale or Inpaint model)`
+`               4x_NMKD-Superscale-SP_178000_G.pth (Upscale or Inpaint model)`
 
 `Generation stats:`  
 `6 cached input image(s) of 0x0 pixels`  
@@ -110,16 +110,15 @@ For instructions on removing cappings on image resolution in the plugin and Comf
 
 `System info:`  
 `os: nt`  
-`ram\_total: 32 GB`  
-`ram\_free: 23.1 GB`  
-`comfyui\_version: 0.3.19`  
-`python\_version: 3.10.11`   
-
-`pytorch\_version: 2.6.0+cu124`  
+`ram_total: 32 GB`  
+`ram_free: 23.1 GB`  
+`comfyui_version: 0.3.19`  
+`python_version: 3.10.11`   
+`pytorch_version: 2.6.0+cu124`  
 `GPU device features:`  
 `name: cuda:0 NVIDIA GeForce RTX 4070 Ti SUPER`  
-`vram\_total: 16 GB`  
-`vram\_free: 14.7 GB`
+`vram_total: 16 GB`  
+`vram_free: 14.7 GB` 
 
 # Examples of images upscaled, refined and inpainted with Krita AI Hires
 
