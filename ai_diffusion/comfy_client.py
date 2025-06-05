@@ -397,7 +397,7 @@ class ComfyClient(Client):
         
         return client
 
-    async def _get(self, op: str, timeout: float | None = 30):
+    async def _get(self, op: str, timeout: float | None = 60):
         return await self._requests.get(f"{self.url}/{op}", timeout=timeout)
 
     async def _post(self, op: str, data: dict):
@@ -748,8 +748,9 @@ class ComfyClient(Client):
         if "gguf" in folder_name and not self.features.gguf:
             return {}
         try:
-            return await self._get(f"api/etn/model_info/{folder_name}")
-        except NetworkError:
+            return await self._get(f"api/etn/model_info/{folder_name}", timeout=120)
+        except NetworkError as e:
+            log.error(f"Error while inspecting models in {folder_name}: {str(e)}")
             return {}  # server has old external tooling version
 
     @property
