@@ -495,7 +495,7 @@ class Model(QObject, ObservableProperties):
             return False
 
     def _get_current_image(self, bounds: Bounds):
-        exclude = None
+        exclude = []
         if self.workspace is not Workspace.live:
             # minsky91: prevent canvas layer from being added to the exclude list, causing numerous issues
             active_id = self._doc._layers._active_id
@@ -505,6 +505,13 @@ class Model(QObject, ObservableProperties):
             ]
             if self._layer:  # exclude preview layer
                 exclude.append(self._layer)
+
+        if not any(l.is_visible and l not in exclude for l in self.layers.images):
+            warning = _(
+                "Tried to capture the current image, but there are no visible layers! Preview and control layers are not considered to be part of the input image."
+            )
+            raise ValueError(warning)
+
         return self._doc.get_image(bounds, exclude_layers=exclude)
 
     def generate_control_layer(self, control: ControlLayer):
