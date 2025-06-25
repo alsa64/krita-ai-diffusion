@@ -115,7 +115,7 @@ class QueuePopup(QMenu):
 
         resolution_multiplier_label = QLabel(_("Resolution"), self)
         self._resolution_multiplier_slider = QSlider(Qt.Orientation.Horizontal, self)
-        self._resolution_multiplier_slider.setRange(3, 15)
+        self._resolution_multiplier_slider.setRange(1, 80)
         self._resolution_multiplier_slider.setValue(10)
         self._resolution_multiplier_slider.setSingleStep(1)
         self._resolution_multiplier_slider.setPageStep(1)
