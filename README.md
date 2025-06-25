@@ -1,3 +1,8 @@
+# Forked again:
+
+- Rebased on latest upstream
+- Unlocked the Resolution multiplier slider, allowing to refine and inpaint objects at much higher qualities, or on huge resolutions by setting the range from 0.1 to 8.0 instead of 0.3 to 1.5. As a rule of thumb, refining works at 1.5 the base resolution of a model, use the longer side of the selection to calculate the multiplier, so for example if your selection is 512px long and you use SDXL with it's base resolution of 1024, that would be (1024 \* 1.5) / 512 == `3.0`. I use this as an extremely capable location specific high res fix alternative.
+
 # Introducing Krita AI Hires R1.0 (preview), a high resolution version of the Krita AI Diffusion plugin
 
 You might be interested in this version if you:
@@ -66,7 +71,7 @@ At the moment, there is no automatic installation or update routine like impleme
 `ren "C:\AI\StabilityMatrix\Packages\ComfyUI\custom_nodes\comfyui-tooling-nodes_baseline" "comfyui-tooling-nodes"`
 
 7. In the pykrita folder, make a copy of ai_diffusion.desktop with the extension ‘desktop_hires’ and change line 7 to ’Name=AI Image Diffusion Hires’.
-8. Run to_hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to_baseline.bat) and _restart both_ the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it.
+8. Run to*hires.bat to activate the Hires version (alternatively, to switch to the standard version when the Hires version is active, run to_baseline.bat) and \_restart both* the Comfy server and Krita. To check if the switch did what was intended, check the version indicator in the Configure Image Diffusion / Plugin tab, it should have ‘Hires’ in it.
 
 For instructions on removing cappings on image resolution in the plugin and Comfy server, [click here](https://github.com/minsky91/krita-ai-diffusion/wiki/6.-How-to-remove-size-cappings-on-high-resolution-images-in-ComfyUI-and-Krita-AI). That will allow you to process files of resolutions as high as **24K** \- _if_ your GPU hardware is up to the task, naturally.
 
