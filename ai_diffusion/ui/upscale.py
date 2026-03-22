@@ -153,7 +153,7 @@ class UpscaleWidget(QWidget):
         self.overlap_custom_combo.addItem(_("Custom"), TileOverlapMode.custom)
         self.overlap_input = QSpinBox(self)
         self.overlap_input.setMinimum(0)
-        self.overlap_input.setMaximum(128)
+        self.overlap_input.setMaximum(512)
         self.overlap_input.setSingleStep(8)
         self.overlap_input.setSuffix(" px")
         self.overlap_input.setEnabled(False)

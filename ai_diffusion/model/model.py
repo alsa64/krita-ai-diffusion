@@ -1124,7 +1124,7 @@ class UpscaleWorkspace(QObject, ObservableProperties):
     strength = Property(0.3, persist=True)
     unblur_strength = Property(0.5, persist=True)
     tile_overlap_mode = Property(TileOverlapMode.auto, persist=True)
-    tile_overlap = Property(48, persist=True)
+    tile_overlap = Property(128, persist=True)
     use_prompt = Property(False, persist=True)
     can_generate = Property(True)
 
