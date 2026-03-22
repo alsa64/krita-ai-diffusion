@@ -224,6 +224,7 @@ class QueuePopup(QMenu):
             bind_combo(model, "queue_mode", self._queue_mode_combo),
             model.jobs.count_changed.connect(self._update_job_count),
         ]
+        self._update_resolution_multiplier()
         self._update_job_count()
 
     def _create_cancel_button(self, name: str, action: Callable[[], None]):
