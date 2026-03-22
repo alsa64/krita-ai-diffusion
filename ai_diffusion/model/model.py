@@ -323,7 +323,11 @@ class DocumentModel(QObject, ObservableProperties):
         loras = input.models.loras if input.models else []
         job_name = prompt_meta.get("prompt_eval", prompt_meta["prompt"])
         job_params = JobParams(bounds, job_name, regions=job_regions)
-        job_params.set_style(self.active_style, ensure(input.models).checkpoint)
+        job_params.set_style(
+            self.active_style,
+            ensure(input.models).checkpoint,
+            self.effective_resolution_multiplier,
+        )
         job_params.set_control(regions.control)
         job_params.inpaint_mode = inpaint_mode
         job_params.ref_layers = ref_layers
@@ -572,7 +576,11 @@ class DocumentModel(QObject, ObservableProperties):
                     custom_input.models.loras + prepared.loras, key=lambda l: l.name
                 )
 
-                job_params.set_style(self.style, custom_input.models.checkpoint)
+                job_params.set_style(
+                    self.style,
+                    custom_input.models.checkpoint,
+                    self.effective_resolution_multiplier,
+                )
                 metadata.update(prepared.metadata)
                 metadata["loras"] = [
                     {"name": l.name, "weight": l.strength} for l in custom_input.models.loras

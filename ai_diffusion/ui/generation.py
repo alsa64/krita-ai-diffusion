@@ -206,6 +206,7 @@ class HistoryWidget(QListWidget):
         "seed": _("Seed"),
         "steps": _("Sampler Steps"),
         "guidance": _("Guidance Strength (CFG Scale)"),
+        "resolution_multiplier": _("Resolution"),
         "control": _("Control Layers"),
     }
 
