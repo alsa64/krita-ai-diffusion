@@ -125,7 +125,7 @@ class ImageFileFormat(Enum):
 
 class PerformancePresetSettings(NamedTuple):
     batch_size: int = 4
-    resolution_multiplier: float = 1.0
+    resolution_multiplier: float = 1.5
     max_pixel_count: int = 6
     tiled_vae: bool = False
 
@@ -133,7 +133,7 @@ class PerformancePresetSettings(NamedTuple):
 @dataclass
 class PerformanceSettings:
     batch_size: int = 4
-    resolution_multiplier: float = 1.0
+    resolution_multiplier: float = 1.5
     max_pixel_count: int = 6
     dynamic_caching: bool = False
     tiled_vae: bool = False
@@ -430,7 +430,7 @@ class Settings(QObject):
     resolution_multiplier: float
     _resolution_multiplier = Setting(
         _("Resolution Multiplier"),
-        1.0,
+        1.5,
         _(
             "Scaling factor for generation. Values below 1.0 improve performance for high resolution canvas."
         ),
@@ -460,28 +460,28 @@ class Settings(QObject):
     _performance_presets: ClassVar[dict[PerformancePreset, PerformancePresetSettings]] = {
         PerformancePreset.cpu: PerformancePresetSettings(
             batch_size=1,
-            resolution_multiplier=1.0,
+            resolution_multiplier=1.5,
             max_pixel_count=2,
         ),
         PerformancePreset.low: PerformancePresetSettings(
             batch_size=2,
-            resolution_multiplier=1.0,
+            resolution_multiplier=1.5,
             max_pixel_count=2,
             tiled_vae=True,
         ),
         PerformancePreset.medium: PerformancePresetSettings(
             batch_size=4,
-            resolution_multiplier=1.0,
+            resolution_multiplier=1.5,
             max_pixel_count=6,
         ),
         PerformancePreset.high: PerformancePresetSettings(
             batch_size=6,
-            resolution_multiplier=1.0,
+            resolution_multiplier=1.5,
             max_pixel_count=8,
         ),
         PerformancePreset.cloud: PerformancePresetSettings(
             batch_size=8,
-            resolution_multiplier=1.0,
+            resolution_multiplier=1.5,
             max_pixel_count=6,
         ),
     }

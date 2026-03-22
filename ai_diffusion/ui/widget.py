@@ -163,12 +163,12 @@ class QueuePopup(QMenu):
         resolution_multiplier_label = QLabel(_("Resolution"), self)
         self._resolution_multiplier_slider = QSlider(Qt.Orientation.Horizontal, self)
         self._resolution_multiplier_slider.setRange(1, 40)
-        self._resolution_multiplier_slider.setValue(10)
+        self._resolution_multiplier_slider.setValue(15)
         self._resolution_multiplier_slider.setSingleStep(1)
         self._resolution_multiplier_slider.setPageStep(1)
         self._resolution_multiplier_slider.setToolTip(Settings._resolution_multiplier.desc)
         self._resolution_multiplier_slider.valueChanged.connect(self._set_resolution_multiplier)
-        self._resolution_multiplier_display = QLabel("1.0 x", self)
+        self._resolution_multiplier_display = QLabel("1.5 x", self)
         self._resolution_multiplier_display.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._resolution_multiplier_display.setMinimumWidth(20)
         resolution_multiplier_layout = QHBoxLayout()
@@ -1031,7 +1031,7 @@ class GenerateButton(QPushButton):
             seed_rect = rect.adjusted(rect.width() - cost_width - seed_width, 0, 0, 0)
             style.drawItemPixmap(painter, seed_rect, align, pixmap)
 
-        if is_hover and self.model.resolution_multiplier != 1.0:
+        if is_hover and self.model.resolution_multiplier != 1.5:
             pixmap = self._resolution_icon.pixmap(fm.height())
             resolution_rect = rect.adjusted(
                 rect.width() - cost_width - seed_width - pixmap_width - 4, 0, 0, 0

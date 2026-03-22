@@ -138,7 +138,7 @@ class DocumentModel(QObject, ObservableProperties):
     batch_count = Property(1, persist=True)
     seed = Property(0, persist=True)
     fixed_seed = Property(False, persist=True)
-    resolution_multiplier = Property(1.0, persist=True)
+    resolution_multiplier = Property(1.5, persist=True)
     queue_mode = Property(QueueMode.back, persist=True)
     translation_enabled = Property(True, persist=True)
     layer_count = Property(4, persist=True)
@@ -961,7 +961,7 @@ class DocumentModel(QObject, ObservableProperties):
 
     def _performance_settings(self, client: Client):
         result = client.performance_settings
-        if self.resolution_multiplier != 1.0:
+        if self.resolution_multiplier != 1.5:
             result.resolution_multiplier = self.resolution_multiplier
         return result
 
