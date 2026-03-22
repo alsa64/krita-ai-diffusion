@@ -42,7 +42,6 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QStyle,
     QStyleOption,
-    QRadioButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -60,7 +59,6 @@ from ..model.model import (
     ErrorKind,
     ProgressKind,
     QueueMode,
-    ResolutionMultiplierMode,
     SamplingQuality,
     Workspace,
     no_error,
@@ -164,18 +162,12 @@ class QueuePopup(QMenu):
         self._layout.addLayout(seed_layout, 2, 1)
 
         resolution_multiplier_label = QLabel(_("Resolution"), self)
-        self._resolution_smart_native = QRadioButton(_("Smart Native"), self)
-        self._resolution_smart_native_x15 = QRadioButton(_("Smart Native x 1.5"), self)
-        self._resolution_manual = QRadioButton(_("Manual"), self)
+        self._use_smart_resolution = QCheckBox(_("Smart Resolution"), self)
         self._resolution_smart_rotate = QCheckBox(_("Smart Rotate"), self)
-        self._resolution_smart_native.toggled.connect(self._set_resolution_multiplier_mode)
-        self._resolution_smart_native_x15.toggled.connect(self._set_resolution_multiplier_mode)
-        self._resolution_manual.toggled.connect(self._set_resolution_multiplier_mode)
+        self._use_smart_resolution.toggled.connect(self._set_use_smart_resolution)
         self._resolution_smart_rotate.toggled.connect(self._set_smart_rotate)
         resolution_mode_layout = QHBoxLayout()
-        resolution_mode_layout.addWidget(self._resolution_smart_native)
-        resolution_mode_layout.addWidget(self._resolution_smart_native_x15)
-        resolution_mode_layout.addWidget(self._resolution_manual)
+        resolution_mode_layout.addWidget(self._use_smart_resolution)
         resolution_mode_layout.addWidget(self._resolution_smart_rotate)
         self._resolution_multiplier_slider = QSlider(Qt.Orientation.Horizontal, self)
         self._resolution_multiplier_slider.setRange(1, 40)
@@ -241,7 +233,7 @@ class QueuePopup(QMenu):
             model.fixed_seed_changed.connect(self._randomize_seed.setEnabled),
             self._randomize_seed.clicked.connect(model.generate_seed),
             model.resolution_multiplier_changed.connect(self._update_resolution_multiplier),
-            model.resolution_multiplier_mode_changed.connect(self._update_resolution_multiplier),
+            model.use_smart_resolution_changed.connect(self._update_resolution_multiplier),
             model.smart_rotate_changed.connect(self._update_resolution_multiplier),
             model.style_changed.connect(self._update_resolution_multiplier),
             model.strength_changed.connect(self._update_resolution_multiplier),
@@ -275,37 +267,21 @@ class QueuePopup(QMenu):
         self._cancel_all.setEnabled(has_active or n_queued > 0)
 
     def _update_resolution_multiplier(self):
-        mode = self.model.resolution_multiplier_mode
         slider_value = round(self.model.resolution_multiplier * 10)
         display_value = self.model.effective_resolution_multiplier
-        is_manual = mode is ResolutionMultiplierMode.manual
         with (
-            SignalBlocker(self._resolution_smart_native),
-            SignalBlocker(self._resolution_smart_native_x15),
-            SignalBlocker(self._resolution_manual),
+            SignalBlocker(self._use_smart_resolution),
             SignalBlocker(self._resolution_smart_rotate),
         ):
-            self._resolution_smart_native.setChecked(mode is ResolutionMultiplierMode.smart_native)
-            self._resolution_smart_native_x15.setChecked(
-                mode is ResolutionMultiplierMode.smart_native_x15
-            )
-            self._resolution_manual.setChecked(is_manual)
+            self._use_smart_resolution.setChecked(self.model.use_smart_resolution)
             self._resolution_smart_rotate.setChecked(self.model.smart_rotate)
-        self._resolution_multiplier_slider.setEnabled(is_manual)
-        self._resolution_smart_rotate.setEnabled(not is_manual)
+        self._resolution_smart_rotate.setEnabled(self.model.use_smart_resolution)
         if self._resolution_multiplier_slider.value() != slider_value:
             self._resolution_multiplier_slider.setValue(slider_value)
         self._resolution_multiplier_display.setText(f"{display_value:.1f} x")
 
-    def _set_resolution_multiplier_mode(self, checked=False):
-        if not checked:
-            return
-        if self._resolution_manual.isChecked():
-            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.manual
-        elif self._resolution_smart_native.isChecked():
-            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.smart_native
-        else:
-            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.smart_native_x15
+    def _set_use_smart_resolution(self, checked: bool):
+        self.model.use_smart_resolution = checked
         self._update_resolution_multiplier()
 
     def _set_smart_rotate(self, checked: bool):
@@ -1092,10 +1068,7 @@ class GenerateButton(QPushButton):
             seed_rect = rect.adjusted(rect.width() - cost_width - seed_width, 0, 0, 0)
             style.drawItemPixmap(painter, seed_rect, align, pixmap)
 
-        if is_hover and (
-            self.model.resolution_multiplier_mode is not ResolutionMultiplierMode.smart_native_x15
-            or self.model.smart_rotate
-        ):
+        if is_hover and (not self.model.use_smart_resolution or self.model.smart_rotate):
             pixmap = self._resolution_icon.pixmap(fm.height())
             resolution_rect = rect.adjusted(
                 rect.width() - cost_width - seed_width - pixmap_width - 4, 0, 0, 0

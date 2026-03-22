@@ -81,12 +81,6 @@ class QueueMode(Enum):
     replace = 2
 
 
-class ResolutionMultiplierMode(Enum):
-    smart_native = 0
-    smart_native_x15 = 1
-    manual = 2
-
-
 class Workspace(Enum):
     generation = 0
     upscaling = 1
@@ -146,7 +140,7 @@ class DocumentModel(QObject, ObservableProperties):
     seed = Property(0, persist=True)
     fixed_seed = Property(False, persist=True)
     resolution_multiplier = Property(1.5, persist=True)
-    resolution_multiplier_mode = Property(ResolutionMultiplierMode.smart_native_x15, persist=True)
+    use_smart_resolution = Property(True, persist=True)
     smart_rotate = Property(False, persist=True)
     queue_mode = Property(QueueMode.back, persist=True)
     translation_enabled = Property(True, persist=True)
@@ -164,7 +158,7 @@ class DocumentModel(QObject, ObservableProperties):
     seed_changed = pyqtSignal(int)
     fixed_seed_changed = pyqtSignal(bool)
     resolution_multiplier_changed = pyqtSignal(float)
-    resolution_multiplier_mode_changed = pyqtSignal(ResolutionMultiplierMode)
+    use_smart_resolution_changed = pyqtSignal(bool)
     smart_rotate_changed = pyqtSignal(bool)
     queue_mode_changed = pyqtSignal(QueueMode)
     translation_enabled_changed = pyqtSignal(bool)
@@ -1033,10 +1027,7 @@ class DocumentModel(QObject, ObservableProperties):
         return compute_bounds(extent, mask_bounds, workflow_kind)
 
     def _find_smart_rotate(self, mask: Mask, workflow_kind: WorkflowKind):
-        if (
-            not self.smart_rotate
-            or self.resolution_multiplier_mode is ResolutionMultiplierMode.manual
-        ):
+        if not self.smart_rotate or not self.use_smart_resolution:
             return 0.0, None
 
         current_area = mask.bounds.area
@@ -1077,13 +1068,10 @@ class DocumentModel(QObject, ObservableProperties):
 
     @property
     def effective_resolution_multiplier(self):
-        if self.resolution_multiplier_mode is ResolutionMultiplierMode.manual:
+        if not self.use_smart_resolution:
             return self.resolution_multiplier
 
-        target_resolution = self._native_resolution()
-        if self.resolution_multiplier_mode is ResolutionMultiplierMode.smart_native_x15:
-            target_resolution = round(target_resolution * 1.5)
-
+        target_resolution = round(self._native_resolution() * self.resolution_multiplier)
         context_mp = self._resolution_context_extent().pixel_count / 1_000_000
         target_mp = (target_resolution * target_resolution) / 1_000_000
         if context_mp <= 0:
