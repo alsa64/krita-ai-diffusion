@@ -47,7 +47,7 @@ from ..backend.resolution import compute_bounds, compute_relative_bounds
 from ..backend.resources import ControlMode
 from ..document import Document, KritaDocument, SelectionModifiers
 from ..files import FileLibrary
-from ..image import BlendMode, Bounds, DummyImage, Extent, Image, Mask
+from ..image import BlendMode, Bounds, DummyImage, Extent, Image, ImageCollection, Mask
 from ..layer import Layer, LayerType, RestoreActiveLayer
 from ..localization import translate as _
 from ..pose import Pose
@@ -147,6 +147,7 @@ class DocumentModel(QObject, ObservableProperties):
     fixed_seed = Property(False, persist=True)
     resolution_multiplier = Property(1.5, persist=True)
     resolution_multiplier_mode = Property(ResolutionMultiplierMode.smart_native_x15, persist=True)
+    smart_rotate = Property(False, persist=True)
     queue_mode = Property(QueueMode.back, persist=True)
     translation_enabled = Property(True, persist=True)
     layer_count = Property(4, persist=True)
@@ -164,6 +165,7 @@ class DocumentModel(QObject, ObservableProperties):
     fixed_seed_changed = pyqtSignal(bool)
     resolution_multiplier_changed = pyqtSignal(float)
     resolution_multiplier_mode_changed = pyqtSignal(ResolutionMultiplierMode)
+    smart_rotate_changed = pyqtSignal(bool)
     queue_mode_changed = pyqtSignal(QueueMode)
     translation_enabled_changed = pyqtSignal(bool)
     layer_count_changed = pyqtSignal(int)
@@ -240,12 +242,8 @@ class DocumentModel(QObject, ObservableProperties):
 
     def _prepare_workflow(self, dryrun=False):
         arch = self.arch
-        workflow_kind = WorkflowKind.generate
-        strength = self.strength
-        if arch is Arch.qwen_l:
-            strength = 1.0
-        if strength < 1.0 or self.is_editing:
-            workflow_kind = WorkflowKind.refine
+
+        workflow_kind, strength = self._resolution_inputs()
         client = self._connection.client
         image = None
         inpaint_mode: InpaintMode | None = None
@@ -264,8 +262,7 @@ class DocumentModel(QObject, ObservableProperties):
                 bounds = mask.bounds
                 inpaint_mode = InpaintMode.add_object
         else:  # Selection inpaint or refine
-            bounds = compute_bounds(extent, mask.bounds if mask else None, workflow_kind)
-            bounds = self.inpaint.get_context(self, mask) or bounds
+            bounds = self._selection_context_bounds(mask, workflow_kind)
             inpaint_mode = self.resolve_inpaint_mode()
 
         if not dryrun:
@@ -294,7 +291,22 @@ class DocumentModel(QObject, ObservableProperties):
             elif workflow_kind is WorkflowKind.refine:
                 workflow_kind = WorkflowKind.refine_region
 
-            bounds, mask.bounds = compute_relative_bounds(bounds, mask.bounds)
+            target_bounds = mask.bounds
+            context_bounds = bounds
+            full_mask = self._mask_in_context(mask, context_bounds)
+            smart_rotate, rotated_bounds = self._find_smart_rotate(full_mask, workflow_kind)
+            if smart_rotate != 0 and rotated_bounds is not None:
+                image = Image.crop(Image.rotate(image, smart_rotate), rotated_bounds)
+                rotated_mask = Mask.crop(Mask.rotate(full_mask, smart_rotate), rotated_bounds)
+                rotated_mask_bounds = ensure(rotated_mask.nonzero_bounds())
+                mask = Mask(
+                    rotated_mask_bounds,
+                    rotated_mask.image.copy(*rotated_mask_bounds),
+                )
+                bounds = target_bounds
+            else:
+                smart_rotate = 0.0
+                bounds, mask.bounds = compute_relative_bounds(context_bounds, target_bounds)
 
             assert inpaint_mode is not None
             if inpaint_mode is InpaintMode.custom:
@@ -304,6 +316,8 @@ class DocumentModel(QObject, ObservableProperties):
                     inpaint_mode, mask.bounds, arch, conditioning, strength
                 )
             inpaint = calc_selection_pre_process(inpaint, selection_bounds, smod)
+        else:
+            smart_rotate = 0.0
 
         input = workflow.prepare(
             workflow_kind,
@@ -323,6 +337,7 @@ class DocumentModel(QObject, ObservableProperties):
         loras = input.models.loras if input.models else []
         job_name = prompt_meta.get("prompt_eval", prompt_meta["prompt"])
         job_params = JobParams(bounds, job_name, regions=job_regions)
+        job_params.rotation = smart_rotate
         job_params.set_style(
             self.active_style,
             ensure(input.models).checkpoint,
@@ -697,7 +712,15 @@ class DocumentModel(QObject, ObservableProperties):
             if message.error:  # successful jobs may have encountered some warnings
                 self.report_error(Error.from_string(message.error, ErrorKind.warning))
             if message.images:
-                self.jobs.set_results(job, message.images)
+                if job.params.rotation != 0:
+                    images = ImageCollection()
+                    for image in message.images:
+                        restored = Image.rotate(image, -job.params.rotation)
+                        restored = Image.center_crop(restored, job.params.bounds.extent)
+                        images.append(restored)
+                    self.jobs.set_results(job, images)
+                else:
+                    self.jobs.set_results(job, message.images)
             if job.kind is JobKind.control_layer:
                 assert job.control is not None
                 job.control.layer_id = self.add_control_layer(job, message.result).id
@@ -982,20 +1005,74 @@ class DocumentModel(QObject, ObservableProperties):
             return preferred_resolution
         return 512 if self.arch is Arch.sd15 else 1024
 
-    def _resolution_context_extent(self):
+    def _resolution_inputs(self):
         workflow_kind = WorkflowKind.generate
         strength = 1.0 if self.arch is Arch.qwen_l else self.strength
         if strength < 1.0 or self.is_editing:
             workflow_kind = WorkflowKind.refine
+        return workflow_kind, strength
 
+    def _selection_context_bounds(self, mask: Mask, workflow_kind: WorkflowKind):
+        bounds = self.inpaint.get_context(self, mask)
+        if bounds is None:
+            bounds = compute_bounds(self.document.extent, mask.bounds, workflow_kind)
+        return bounds
+
+    def _mask_in_context(self, mask: Mask, context_bounds: Bounds):
+        local_bounds = mask.bounds.relative_to(context_bounds)
+        return Mask(local_bounds, mask.image).to_image(context_bounds.extent).to_mask()
+
+    def _smart_rotate_context_bounds(
+        self, extent: Extent, mask_bounds: Bounds, workflow_kind: WorkflowKind
+    ):
+        if self.inpaint.mode is InpaintMode.custom:
+            if self.inpaint.context is InpaintContext.mask_bounds:
+                return mask_bounds
+            if self.inpaint.context in (InpaintContext.entire_image, InpaintContext.layer_bounds):
+                return Bounds.from_extent(extent)
+        return compute_bounds(extent, mask_bounds, workflow_kind)
+
+    def _find_smart_rotate(self, mask: Mask, workflow_kind: WorkflowKind):
+        if (
+            not self.smart_rotate
+            or self.resolution_multiplier_mode is ResolutionMultiplierMode.manual
+        ):
+            return 0.0, None
+
+        current_area = mask.bounds.area
+        best_angle = 0.0
+        best_bounds = None
+        best_area = current_area
+        for angle in range(-45, 50, 5):
+            if angle == 0:
+                continue
+            rotated = Mask.rotate(mask, angle)
+            rotated_mask_bounds = rotated.nonzero_bounds()
+            if rotated_mask_bounds is None:
+                continue
+            context_bounds = self._smart_rotate_context_bounds(
+                rotated.bounds.extent, rotated_mask_bounds, workflow_kind
+            )
+            if context_bounds.area < best_area:
+                best_angle = float(angle)
+                best_bounds = context_bounds
+                best_area = context_bounds.area
+        if best_bounds is None or best_area > current_area * 0.9:
+            return 0.0, None
+        return best_angle, best_bounds
+
+    def _resolution_context_extent(self):
+        workflow_kind, strength = self._resolution_inputs()
         modifiers = get_selection_modifiers(self.arch, self.inpaint.mode, strength)
         mask, _selection_bounds = self.document.create_mask_from_selection(modifiers)
         if mask is None:
             return self.document.extent
 
-        bounds = self.inpaint.get_context(self, mask)
-        if bounds is None:
-            bounds = compute_bounds(self.document.extent, mask.bounds, workflow_kind)
+        bounds = self._selection_context_bounds(mask, workflow_kind)
+        full_mask = self._mask_in_context(mask, bounds)
+        _angle, rotated_bounds = self._find_smart_rotate(full_mask, workflow_kind)
+        if rotated_bounds is not None:
+            return rotated_bounds.extent
         return bounds.extent
 
     @property

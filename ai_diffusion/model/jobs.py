@@ -62,6 +62,7 @@ class JobParams:
     frame: tuple[int, int, int] = (0, 0, 0)
     animation_id: str = ""
     resize_canvas: bool = False
+    rotation: float = 0.0
 
     @staticmethod
     def from_dict(data: dict[str, Any]):

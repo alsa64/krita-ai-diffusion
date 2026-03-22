@@ -17,6 +17,7 @@ from PyQt5.QtGui import (
     QImageWriter,
     QPainter,
     QPixmap,
+    QTransform,
     qAlpha,
     qBlue,
     qGray,
@@ -431,7 +432,30 @@ class Image:
 
     @staticmethod
     def crop(img: Image, bounds: Bounds):
+        if isinstance(img, DummyImage):
+            return DummyImage(bounds.extent)
         return Image(img._qimage.copy(*bounds))
+
+    @staticmethod
+    def center_crop(img: Image, extent: Extent):
+        if img.extent == extent:
+            return img
+        assert img.width >= extent.width and img.height >= extent.height
+        x = (img.width - extent.width) // 2
+        y = (img.height - extent.height) // 2
+        return Image.crop(img, Bounds(x, y, extent.width, extent.height))
+
+    @staticmethod
+    def rotate(
+        img: Image,
+        angle: float,
+        smooth: Qt.TransformationMode = Qt.TransformationMode.SmoothTransformation,
+    ):
+        if angle == 0 or isinstance(img, DummyImage):
+            return img
+        transform = QTransform()
+        transform.rotate(angle)
+        return Image(img._qimage.transformed(transform, smooth))
 
     @staticmethod
     def _mask_op(lhs: Image, rhs: Image, mode: QPainter.CompositionMode):
@@ -843,6 +867,27 @@ class Mask:
     @staticmethod
     def crop(mask: Mask, bounds: Bounds):
         return Mask(bounds, mask.image.copy(*bounds))
+
+    @staticmethod
+    def rotate(mask: Mask, angle: float):
+        rotated = Image.rotate(mask.to_image(), angle, Qt.TransformationMode.FastTransformation)
+        return rotated.to_mask()
+
+    def nonzero_bounds(self):
+        min_x = self.image.width()
+        min_y = self.image.height()
+        max_x = -1
+        max_y = -1
+        for y in range(self.image.height()):
+            for x in range(self.image.width()):
+                if qGray(self.image.pixel(x, y)) > 0:
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+        if max_x < 0 or max_y < 0:
+            return None
+        return Bounds(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
 
     def value(self, x: int, y: int):
         if self.bounds.is_within(x, y):
