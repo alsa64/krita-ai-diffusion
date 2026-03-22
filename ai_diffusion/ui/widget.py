@@ -42,7 +42,9 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QStyle,
     QStyleOption,
+    QRadioButton,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
@@ -58,6 +60,7 @@ from ..model.model import (
     ErrorKind,
     ProgressKind,
     QueueMode,
+    ResolutionMultiplierMode,
     SamplingQuality,
     Workspace,
     no_error,
@@ -161,6 +164,16 @@ class QueuePopup(QMenu):
         self._layout.addLayout(seed_layout, 2, 1)
 
         resolution_multiplier_label = QLabel(_("Resolution"), self)
+        self._resolution_smart_native = QRadioButton(_("Smart Native"), self)
+        self._resolution_smart_native_x15 = QRadioButton(_("Smart Native x 1.5"), self)
+        self._resolution_manual = QRadioButton(_("Manual"), self)
+        self._resolution_smart_native.toggled.connect(self._set_resolution_multiplier_mode)
+        self._resolution_smart_native_x15.toggled.connect(self._set_resolution_multiplier_mode)
+        self._resolution_manual.toggled.connect(self._set_resolution_multiplier_mode)
+        resolution_mode_layout = QHBoxLayout()
+        resolution_mode_layout.addWidget(self._resolution_smart_native)
+        resolution_mode_layout.addWidget(self._resolution_smart_native_x15)
+        resolution_mode_layout.addWidget(self._resolution_manual)
         self._resolution_multiplier_slider = QSlider(Qt.Orientation.Horizontal, self)
         self._resolution_multiplier_slider.setRange(1, 40)
         self._resolution_multiplier_slider.setValue(15)
@@ -171,11 +184,15 @@ class QueuePopup(QMenu):
         self._resolution_multiplier_display = QLabel("1.5 x", self)
         self._resolution_multiplier_display.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._resolution_multiplier_display.setMinimumWidth(20)
-        resolution_multiplier_layout = QHBoxLayout()
-        resolution_multiplier_layout.addWidget(self._resolution_multiplier_slider)
-        resolution_multiplier_layout.addWidget(self._resolution_multiplier_display)
+        resolution_slider_layout = QHBoxLayout()
+        resolution_slider_layout.addWidget(self._resolution_multiplier_slider)
+        resolution_slider_layout.addWidget(self._resolution_multiplier_display)
+        resolution_layout = QVBoxLayout()
+        resolution_layout.setContentsMargins(0, 0, 0, 0)
+        resolution_layout.addLayout(resolution_mode_layout)
+        resolution_layout.addLayout(resolution_slider_layout)
         self._layout.addWidget(resolution_multiplier_label, 3, 0)
-        self._layout.addLayout(resolution_multiplier_layout, 3, 1)
+        self._layout.addLayout(resolution_layout, 3, 1)
 
         enqueue_label = QLabel(_("Enqueue"), self)
         self._queue_mode_combo = QComboBox(self)
@@ -221,6 +238,13 @@ class QueuePopup(QMenu):
             model.fixed_seed_changed.connect(self._randomize_seed.setEnabled),
             self._randomize_seed.clicked.connect(model.generate_seed),
             model.resolution_multiplier_changed.connect(self._update_resolution_multiplier),
+            model.resolution_multiplier_mode_changed.connect(self._update_resolution_multiplier),
+            model.style_changed.connect(self._update_resolution_multiplier),
+            model.strength_changed.connect(self._update_resolution_multiplier),
+            model.edit_mode_changed.connect(self._update_resolution_multiplier),
+            model.document.selection_bounds_changed.connect(self._update_resolution_multiplier),
+            model.inpaint.context_changed.connect(self._update_resolution_multiplier),
+            model.inpaint.mode_changed.connect(self._update_resolution_multiplier),
             bind_combo(model, "queue_mode", self._queue_mode_combo),
             model.jobs.count_changed.connect(self._update_job_count),
         ]
@@ -247,13 +271,38 @@ class QueuePopup(QMenu):
         self._cancel_all.setEnabled(has_active or n_queued > 0)
 
     def _update_resolution_multiplier(self):
+        mode = self.model.resolution_multiplier_mode
         slider_value = round(self.model.resolution_multiplier * 10)
+        display_value = self.model.effective_resolution_multiplier
+        with (
+            SignalBlocker(self._resolution_smart_native),
+            SignalBlocker(self._resolution_smart_native_x15),
+            SignalBlocker(self._resolution_manual),
+        ):
+            self._resolution_smart_native.setChecked(mode is ResolutionMultiplierMode.smart_native)
+            self._resolution_smart_native_x15.setChecked(
+                mode is ResolutionMultiplierMode.smart_native_x15
+            )
+            self._resolution_manual.setChecked(mode is ResolutionMultiplierMode.manual)
+        self._resolution_multiplier_slider.setEnabled(mode is ResolutionMultiplierMode.manual)
         if self._resolution_multiplier_slider.value() != slider_value:
             self._resolution_multiplier_slider.setValue(slider_value)
+        self._resolution_multiplier_display.setText(f"{display_value:.1f} x")
+
+    def _set_resolution_multiplier_mode(self, checked=False):
+        if not checked:
+            return
+        if self._resolution_manual.isChecked():
+            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.manual
+        elif self._resolution_smart_native.isChecked():
+            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.smart_native
+        else:
+            self.model.resolution_multiplier_mode = ResolutionMultiplierMode.smart_native_x15
+        self._update_resolution_multiplier()
 
     def _set_resolution_multiplier(self, value: int):
         self.model.resolution_multiplier = value / 10
-        self._resolution_multiplier_display.setText(f"{(value / 10):.1f} x")
+        self._update_resolution_multiplier()
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
         if parent := cast(QWidget, self.parent()):
@@ -1031,7 +1080,11 @@ class GenerateButton(QPushButton):
             seed_rect = rect.adjusted(rect.width() - cost_width - seed_width, 0, 0, 0)
             style.drawItemPixmap(painter, seed_rect, align, pixmap)
 
-        if is_hover and self.model.resolution_multiplier != 1.5:
+        if (
+            is_hover
+            and self.model.resolution_multiplier_mode
+            is not ResolutionMultiplierMode.smart_native_x15
+        ):
             pixmap = self._resolution_icon.pixmap(fm.height())
             resolution_rect = rect.adjusted(
                 rect.width() - cost_width - seed_width - pixmap_width - 4, 0, 0, 0

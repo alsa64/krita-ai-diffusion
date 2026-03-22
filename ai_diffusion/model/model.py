@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 import uuid
 import weakref
@@ -80,6 +81,12 @@ class QueueMode(Enum):
     replace = 2
 
 
+class ResolutionMultiplierMode(Enum):
+    smart_native = 0
+    smart_native_x15 = 1
+    manual = 2
+
+
 class Workspace(Enum):
     generation = 0
     upscaling = 1
@@ -139,6 +146,7 @@ class DocumentModel(QObject, ObservableProperties):
     seed = Property(0, persist=True)
     fixed_seed = Property(False, persist=True)
     resolution_multiplier = Property(1.5, persist=True)
+    resolution_multiplier_mode = Property(ResolutionMultiplierMode.smart_native_x15, persist=True)
     queue_mode = Property(QueueMode.back, persist=True)
     translation_enabled = Property(True, persist=True)
     layer_count = Property(4, persist=True)
@@ -155,6 +163,7 @@ class DocumentModel(QObject, ObservableProperties):
     seed_changed = pyqtSignal(int)
     fixed_seed_changed = pyqtSignal(bool)
     resolution_multiplier_changed = pyqtSignal(float)
+    resolution_multiplier_mode_changed = pyqtSignal(ResolutionMultiplierMode)
     queue_mode_changed = pyqtSignal(QueueMode)
     translation_enabled_changed = pyqtSignal(bool)
     layer_count_changed = pyqtSignal(int)
@@ -959,10 +968,47 @@ class DocumentModel(QObject, ObservableProperties):
 
         return cond, layers
 
+    def _native_resolution(self):
+        preferred_resolution = self.active_style.preferred_resolution
+        if preferred_resolution > 0:
+            return preferred_resolution
+        return 512 if self.arch is Arch.sd15 else 1024
+
+    def _resolution_context_extent(self):
+        workflow_kind = WorkflowKind.generate
+        strength = 1.0 if self.arch is Arch.qwen_l else self.strength
+        if strength < 1.0 or self.is_editing:
+            workflow_kind = WorkflowKind.refine
+
+        modifiers = get_selection_modifiers(self.arch, self.inpaint.mode, strength)
+        mask, _selection_bounds = self.document.create_mask_from_selection(modifiers)
+        if mask is None:
+            return self.document.extent
+
+        bounds = self.inpaint.get_context(self, mask)
+        if bounds is None:
+            bounds = compute_bounds(self.document.extent, mask.bounds, workflow_kind)
+        return bounds.extent
+
+    @property
+    def effective_resolution_multiplier(self):
+        if self.resolution_multiplier_mode is ResolutionMultiplierMode.manual:
+            return self.resolution_multiplier
+
+        target_resolution = self._native_resolution()
+        if self.resolution_multiplier_mode is ResolutionMultiplierMode.smart_native_x15:
+            target_resolution = round(target_resolution * 1.5)
+
+        context_mp = self._resolution_context_extent().pixel_count / 1_000_000
+        target_mp = (target_resolution * target_resolution) / 1_000_000
+        if context_mp <= 0:
+            return self.resolution_multiplier
+        # resolution_multiplier scales width/height, so convert the MP ratio to a linear factor
+        return math.sqrt(target_mp / context_mp)
+
     def _performance_settings(self, client: Client):
         result = client.performance_settings
-        if self.resolution_multiplier != 1.5:
-            result.resolution_multiplier = self.resolution_multiplier
+        result.resolution_multiplier = self.effective_resolution_multiplier
         return result
 
     def try_set_preview_layer(self, uid: str):
