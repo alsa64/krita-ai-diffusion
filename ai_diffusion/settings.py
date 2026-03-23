@@ -432,7 +432,7 @@ class Settings(QObject):
         _("Resolution Multiplier"),
         1.5,
         _(
-            "Scaling factor for generation. Values below 1.0 improve performance for high resolution canvas."
+            "Scaling factor for generation. With Smart Resolution enabled, this is applied to the style or model preferred resolution. Values below 1.0 improve performance for high resolution canvas."
         ),
     )
 

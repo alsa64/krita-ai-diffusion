@@ -170,18 +170,27 @@ class QueuePopup(QMenu):
         resolution_mode_layout.addWidget(self._use_smart_resolution)
         resolution_mode_layout.addWidget(self._resolution_smart_rotate)
         self._resolution_multiplier_slider = QSlider(Qt.Orientation.Horizontal, self)
-        self._resolution_multiplier_slider.setRange(1, 40)
-        self._resolution_multiplier_slider.setValue(15)
+        self._resolution_multiplier_slider.setRange(10, 400)
+        self._resolution_multiplier_slider.setValue(150)
         self._resolution_multiplier_slider.setSingleStep(1)
-        self._resolution_multiplier_slider.setPageStep(1)
+        self._resolution_multiplier_slider.setPageStep(10)
         self._resolution_multiplier_slider.setToolTip(Settings._resolution_multiplier.desc)
-        self._resolution_multiplier_slider.valueChanged.connect(self._set_resolution_multiplier)
-        self._resolution_multiplier_display = QLabel("1.5 x", self)
-        self._resolution_multiplier_display.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self._resolution_multiplier_display.setMinimumWidth(20)
+        self._resolution_multiplier_slider.valueChanged.connect(
+            self._set_resolution_multiplier_slider
+        )
+        self._resolution_multiplier_input = QDoubleSpinBox(self)
+        self._resolution_multiplier_input.setRange(0.1, 4.0)
+        self._resolution_multiplier_input.setSingleStep(0.01)
+        self._resolution_multiplier_input.setDecimals(2)
+        self._resolution_multiplier_input.setSuffix(" x")
+        self._resolution_multiplier_input.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._resolution_multiplier_input.setToolTip(Settings._resolution_multiplier.desc)
+        self._resolution_multiplier_input.valueChanged.connect(
+            self._set_resolution_multiplier_input
+        )
         resolution_slider_layout = QHBoxLayout()
         resolution_slider_layout.addWidget(self._resolution_multiplier_slider)
-        resolution_slider_layout.addWidget(self._resolution_multiplier_display)
+        resolution_slider_layout.addWidget(self._resolution_multiplier_input)
         resolution_layout = QVBoxLayout()
         resolution_layout.setContentsMargins(0, 0, 0, 0)
         resolution_layout.addLayout(resolution_mode_layout)
@@ -267,18 +276,18 @@ class QueuePopup(QMenu):
         self._cancel_all.setEnabled(has_active or n_queued > 0)
 
     def _update_resolution_multiplier(self):
-        slider_value = round(self.model.resolution_multiplier * 10)
-        display_value = self.model.effective_resolution_multiplier
+        slider_value = round(self.model.resolution_multiplier * 100)
         with (
             SignalBlocker(self._use_smart_resolution),
             SignalBlocker(self._resolution_smart_rotate),
+            SignalBlocker(self._resolution_multiplier_input),
         ):
             self._use_smart_resolution.setChecked(self.model.use_smart_resolution)
             self._resolution_smart_rotate.setChecked(self.model.smart_rotate)
+            self._resolution_multiplier_input.setValue(self.model.resolution_multiplier)
         self._resolution_smart_rotate.setEnabled(self.model.use_smart_resolution)
         if self._resolution_multiplier_slider.value() != slider_value:
             self._resolution_multiplier_slider.setValue(slider_value)
-        self._resolution_multiplier_display.setText(f"{display_value:.1f} x")
 
     def _set_use_smart_resolution(self, checked: bool):
         self.model.use_smart_resolution = checked
@@ -288,8 +297,12 @@ class QueuePopup(QMenu):
         self.model.smart_rotate = checked
         self._update_resolution_multiplier()
 
-    def _set_resolution_multiplier(self, value: int):
-        self.model.resolution_multiplier = value / 10
+    def _set_resolution_multiplier_slider(self, value: int):
+        self.model.resolution_multiplier = value / 100
+        self._update_resolution_multiplier()
+
+    def _set_resolution_multiplier_input(self, value: float):
+        self.model.resolution_multiplier = value
         self._update_resolution_multiplier()
 
     def closeEvent(self, a0: QCloseEvent | None) -> None:
