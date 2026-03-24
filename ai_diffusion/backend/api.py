@@ -166,9 +166,9 @@ class UpscaleInput:
     model: str = ""  # if empty do tiled refine without upscale model
     tile_overlap: int = -1
     vae_model: str = ""  # for SeedVR2: VAE model name
-    resolution: int = 4096  # for SeedVR2: shorter side resolution
-    max_resolution: int = 4096  # for SeedVR2: longer side max resolution
-    seed: int = 42  # for SeedVR2: random seed
+    resolution: int = 0  # for SeedVR2: shorter side resolution (0 = derive from target)
+    max_resolution: int = 0  # for SeedVR2: longer side max resolution (0 = derive from target)
+    seed: int = 0  # for SeedVR2: random seed (0 = generate new)
 
 
 @dataclass
