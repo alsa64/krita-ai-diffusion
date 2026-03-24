@@ -1806,13 +1806,14 @@ def prepare_upscale_seedvr2(
 ):
     target_extent = target_extent.multiple_of(8)
     extent = ExtentInput(image.extent, image.extent, target_extent, target_extent)
-    upscale.resolution = upscale.resolution or min(target_extent.width, target_extent.height)
-    upscale.max_resolution = upscale.max_resolution or max(
-        target_extent.width, target_extent.height
-    )
+    if not upscale.resolution:
+        upscale.resolution = min(target_extent.width, target_extent.height)
+    if not upscale.max_resolution:
+        upscale.max_resolution = max(target_extent.width, target_extent.height)
+    if not upscale.seed:
+        upscale.seed = seed
     i = WorkflowInput(WorkflowKind.upscale_seedvr2, ImageInput(extent, image))
     i.upscale = upscale
-    i.upscale.seed = seed
     return i
 
 
