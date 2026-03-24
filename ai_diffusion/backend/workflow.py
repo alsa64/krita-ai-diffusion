@@ -1342,13 +1342,27 @@ def upscale_seedvr2(
     extent: ExtentInput,
     dit_model: str,
     vae_model: str,
-    resolution: int = 4096,
-    max_resolution: int = 4096,
-    seed: int = 42,
+    resolution: int = 0,
+    max_resolution: int = 0,
+    seed: int = 0,
+    tile_overlap: int = -1,
 ):
     img = w.load_image(image)
     dit = w.load_seedvr2_dit(dit_model)
     vae = w.load_seedvr2_vae(vae_model)
+
+    if tile_overlap >= 0 and extent.input != extent.target:
+        return upscale_seedvr2_tiled(
+            w, img, extent, dit, vae, resolution, max_resolution, seed, tile_overlap
+        )
+
+    if not resolution:
+        resolution = min(extent.target.width, extent.target.height)
+    if not max_resolution:
+        max_resolution = max(extent.target.width, extent.target.height)
+    if not seed:
+        seed = 42
+
     img = w.upscale_seedvr2(
         img,
         dit,
@@ -1360,6 +1374,53 @@ def upscale_seedvr2(
     if extent.input != extent.target:
         img = w.scale_image(img, extent.target)
     w.send_image(img)
+    return w
+
+
+def upscale_seedvr2_tiled(
+    w: ComfyWorkflow,
+    image: Output,
+    extent: ExtentInput,
+    dit: Output,
+    vae: Output,
+    resolution: int,
+    max_resolution: int,
+    seed: int,
+    tile_overlap: int,
+):
+    multiple = 8
+    tile_layout = TileLayout(extent.target, extent.desired.width, tile_overlap, multiple)
+    layout = w.create_tile_layout(
+        image, tile_layout.min_size, tile_layout.padding, tile_layout.blending, multiple
+    )
+
+    out_image: Output | None = None
+    for i in range(tile_layout.total_tiles):
+        bounds = tile_layout.bounds(i)
+        tile_image = w.extract_image_tile(image, layout, i)
+
+        tile_extent = bounds.extent
+        tile_resolution = min(tile_extent.width, tile_extent.height)
+        tile_max_resolution = max(tile_extent.width, tile_extent.height)
+
+        tile_result = w.upscale_seedvr2(
+            tile_image,
+            dit,
+            vae,
+            resolution=tile_resolution,
+            max_resolution=tile_max_resolution,
+            seed=seed + i if seed else 0,
+        )
+
+        if out_image is None:
+            out_image = tile_result
+        else:
+            out_image = w.merge_image_tile(out_image, layout, i, tile_result)
+
+    assert out_image is not None
+    if extent.input != extent.target:
+        out_image = w.scale_image(out_image, extent.target)
+    w.send_image(out_image)
     return w
 
 
@@ -1897,9 +1958,10 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
             i.extent,
             upscale.model,
             upscale.vae_model or "",
-            upscale.resolution or 4096,
-            upscale.max_resolution or 4096,
-            upscale.seed or 42,
+            upscale.resolution,
+            upscale.max_resolution,
+            upscale.seed,
+            upscale.tile_overlap,
         )
     elif i.kind is WorkflowKind.upscale_tiled:
         return upscale_tiled(
