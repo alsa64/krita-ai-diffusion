@@ -544,14 +544,36 @@ class ComfyWorkflow:
     def load_upscale_model(self, model_name: str):
         return self.add_cached("UpscaleModelLoader", 1, model_name=model_name)
 
-    def load_seedvr2_dit(self, model: str, device: str = "cuda:0", cache_model: bool = True):
+    def load_seedvr2_dit(
+        self,
+        model: str,
+        device: str = "cuda:0",
+        cache_model: bool = False,
+        offload_device: str = "cpu",
+    ):
         return self.add_cached(
-            "SeedVR2LoadDiTModel", 1, model=model, device=device, cache_model=cache_model
+            "SeedVR2LoadDiTModel",
+            1,
+            model=model,
+            device=device,
+            cache_model=cache_model,
+            offload_device=offload_device,
         )
 
-    def load_seedvr2_vae(self, model: str, device: str = "cuda:0", cache_model: bool = True):
+    def load_seedvr2_vae(
+        self,
+        model: str,
+        device: str = "cuda:0",
+        cache_model: bool = False,
+        offload_device: str = "cpu",
+    ):
         return self.add_cached(
-            "SeedVR2LoadVAEModel", 1, model=model, device=device, cache_model=cache_model
+            "SeedVR2LoadVAEModel",
+            1,
+            model=model,
+            device=device,
+            cache_model=cache_model,
+            offload_device=offload_device,
         )
 
     def upscale_seedvr2(
