@@ -550,6 +550,8 @@ class ComfyWorkflow:
         device: str = "cuda:0",
         cache_model: bool = False,
         offload_device: str = "cpu",
+        blocks_to_swap: int = 36,
+        attention_mode: str = "flash_attn_2",
     ):
         return self.add_cached(
             "SeedVR2LoadDiTModel",
@@ -558,6 +560,34 @@ class ComfyWorkflow:
             device=device,
             cache_model=cache_model,
             offload_device=offload_device,
+            blocks_to_swap=blocks_to_swap,
+            swap_io_components=False,
+            attention_mode=attention_mode,
+        )
+
+    def load_seedvr2_vae(
+        self,
+        model: str,
+        device: str = "cuda:0",
+        cache_model: bool = False,
+        offload_device: str = "cpu",
+        tile_size: int = 1024,
+        tile_overlap: int = 128,
+    ):
+        return self.add_cached(
+            "SeedVR2LoadVAEModel",
+            1,
+            model=model,
+            device=device,
+            cache_model=cache_model,
+            offload_device=offload_device,
+            encode_tiled=True,
+            encode_tile_size=tile_size,
+            encode_tile_overlap=tile_overlap,
+            decode_tiled=True,
+            decode_tile_size=tile_size,
+            decode_tile_overlap=tile_overlap,
+            tile_debug="false",
         )
 
     def load_seedvr2_vae(
