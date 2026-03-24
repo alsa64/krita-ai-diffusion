@@ -544,6 +544,49 @@ class ComfyWorkflow:
     def load_upscale_model(self, model_name: str):
         return self.add_cached("UpscaleModelLoader", 1, model_name=model_name)
 
+    def load_seedvr2_dit(self, model: str, device: str = "cuda:0", cache_model: bool = True):
+        return self.add_cached(
+            "SeedVR2LoadDiTModel", 1, model=model, device=device, cache_model=cache_model
+        )
+
+    def load_seedvr2_vae(self, model: str, device: str = "cuda:0", cache_model: bool = True):
+        return self.add_cached(
+            "SeedVR2LoadVAEModel", 1, model=model, device=device, cache_model=cache_model
+        )
+
+    def upscale_seedvr2(
+        self,
+        image: Output,
+        dit: Output,
+        vae: Output,
+        resolution: int = 4096,
+        max_resolution: int = 4096,
+        seed: int = 42,
+        color_correction: str = "lab",
+        input_noise_scale: float = 0.0,
+        latent_noise_scale: float = 0.0,
+    ):
+        self.sample_count += 16
+        return self.add(
+            "SeedVR2VideoUpscaler",
+            1,
+            image=image,
+            dit=dit,
+            vae=vae,
+            seed=seed,
+            resolution=resolution,
+            max_resolution=max_resolution,
+            batch_size=1,
+            uniform_batch_size=False,
+            color_correction=color_correction,
+            temporal_overlap=0,
+            prepend_frames=0,
+            input_noise_scale=input_noise_scale,
+            latent_noise_scale=latent_noise_scale,
+            offload_device="cpu",
+            enable_debug=False,
+        )
+
     def load_style_model(self, model_name: str):
         return self.add_cached("StyleModelLoader", 1, style_model_name=model_name)
 

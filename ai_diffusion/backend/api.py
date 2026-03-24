@@ -20,6 +20,7 @@ class WorkflowKind(Enum):
     upscale_tiled = 5
     control_image = 6
     custom = 7
+    upscale_seedvr2 = 8
 
 
 @dataclass
@@ -164,6 +165,10 @@ class InpaintParams:
 class UpscaleInput:
     model: str = ""  # if empty do tiled refine without upscale model
     tile_overlap: int = -1
+    vae_model: str = ""  # for SeedVR2: VAE model name
+    resolution: int = 4096  # for SeedVR2: shorter side resolution
+    max_resolution: int = 4096  # for SeedVR2: longer side max resolution
+    seed: int = 42  # for SeedVR2: random seed
 
 
 @dataclass
