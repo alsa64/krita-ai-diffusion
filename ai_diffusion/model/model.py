@@ -399,10 +399,17 @@ class DocumentModel(QObject, ObservableProperties):
         image = self._doc.get_image(Bounds(0, 0, *extent)) if not dryrun else DummyImage(extent)
         params = self.upscale.params
         params.upscale.model = params.upscale.model or client.models.default_upscaler
-        if params.upscale.model not in client.models.upscalers:
+
+        is_seedvr2 = params.upscale.model in client.models.seedvr2_dit
+        if is_seedvr2:
+            if not client.models.seedvr2_vae:
+                raise PluginError(_("SeedVR2 VAE model not found on server"))
+            params.upscale.vae_model = client.models.seedvr2_vae[0]
+        elif params.upscale.model not in client.models.upscalers:
             msg = _("The upscale model used by the document is not available on the server")
             self.report_error(Error(ErrorKind.warning, msg + f": {params.upscale.model}"))
             self.upscale.upscaler = params.upscale.model = client.models.default_upscaler
+
         bounds = Bounds(0, 0, *self._doc.extent)
         sys_prompt = "4k uhd"
         if self.arch.is_edit:
@@ -421,7 +428,14 @@ class DocumentModel(QObject, ObservableProperties):
             control = ControlInput(ControlMode.blur, None, params.unblur_strength)
             conditioning.control.append(control)
 
-        if params.use_diffusion:
+        if is_seedvr2:
+            input = workflow.prepare_upscale_seedvr2(
+                image,
+                params.upscale,
+                params.target_extent,
+                params.seed,
+            )
+        elif params.use_diffusion:
             input = workflow.prepare(
                 WorkflowKind.upscale_tiled,
                 image,

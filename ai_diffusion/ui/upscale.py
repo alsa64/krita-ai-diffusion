@@ -253,6 +253,9 @@ class UpscaleWidget(QWidget):
                 for file in sorted(client.models.upscalers):
                     name = file.rsplit(".", 1)[0]
                     self.model_select.addItem(name, file)
+                for file in sorted(client.models.seedvr2_dit):
+                    name = f"SeedVR2 ({file.rsplit('.', 1)[0]})"
+                    self.model_select.addItem(name, file)
                 selected = self.model_select.findData(self.model.upscale.upscaler)
                 self.model_select.setCurrentIndex(max(selected, 0))
 

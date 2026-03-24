@@ -222,6 +222,9 @@ class ComfyClient(Client):
         models.upscalers = nodes.options("UpscaleModelLoader", "model_name")
         available_resources.update(_find_upscalers(models.upscalers))
 
+        models.seedvr2_dit = nodes.options("SeedVR2LoadDiTModel", "model")
+        models.seedvr2_vae = nodes.options("SeedVR2LoadVAEModel", "model")
+
         inpaint_models = nodes.options("INPAINT_LoadInpaintModel", "model_name")
         available_resources.update(_find_inpaint_models(inpaint_models))
 

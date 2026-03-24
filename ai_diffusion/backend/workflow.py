@@ -1336,6 +1336,33 @@ def upscale_simple(w: ComfyWorkflow, image: Image, model: str, factor: float):
     return w
 
 
+def upscale_seedvr2(
+    w: ComfyWorkflow,
+    image: Image,
+    extent: ExtentInput,
+    dit_model: str,
+    vae_model: str,
+    resolution: int = 4096,
+    max_resolution: int = 4096,
+    seed: int = 42,
+):
+    img = w.load_image(image)
+    dit = w.load_seedvr2_dit(dit_model)
+    vae = w.load_seedvr2_vae(vae_model)
+    img = w.upscale_seedvr2(
+        img,
+        dit,
+        vae,
+        resolution=resolution,
+        max_resolution=max_resolution,
+        seed=seed,
+    )
+    if extent.input != extent.target:
+        img = w.scale_image(img, extent.target)
+    w.send_image(img)
+    return w
+
+
 def upscale_tiled(
     w: ComfyWorkflow,
     image: Image,
@@ -1771,6 +1798,20 @@ def prepare_upscale_simple(image: Image, model: str, factor: float):
     return i
 
 
+def prepare_upscale_seedvr2(
+    image: Image,
+    upscale: UpscaleInput,
+    target_extent: Extent,
+    seed: int,
+):
+    target_extent = target_extent.multiple_of(8)
+    extent = ExtentInput(image.extent, image.extent, target_extent, target_extent)
+    i = WorkflowInput(WorkflowKind.upscale_seedvr2, ImageInput(extent, image))
+    i.upscale = upscale
+    i.upscale.seed = seed
+    return i
+
+
 def prepare_create_control_image(
     image: Image,
     mode: ControlMode,
@@ -1843,6 +1884,18 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
         )
     elif i.kind is WorkflowKind.upscale_simple:
         return upscale_simple(workflow, i.image, ensure(i.upscale).model, i.upscale_factor)
+    elif i.kind is WorkflowKind.upscale_seedvr2:
+        upscale = ensure(i.upscale)
+        return upscale_seedvr2(
+            workflow,
+            i.image,
+            i.extent,
+            upscale.model,
+            upscale.vae_model or "",
+            upscale.resolution or 4096,
+            upscale.max_resolution or 4096,
+            upscale.seed or 42,
+        )
     elif i.kind is WorkflowKind.upscale_tiled:
         return upscale_tiled(
             workflow,
