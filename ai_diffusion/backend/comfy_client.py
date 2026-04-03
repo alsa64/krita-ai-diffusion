@@ -224,6 +224,10 @@ class ComfyClient(Client):
 
         models.seedvr2_dit = nodes.options("SeedVR2LoadDiTModel", "model")
         models.seedvr2_vae = nodes.options("SeedVR2LoadVAEModel", "model")
+        if not models.seedvr2_dit and "SeedVR2" in nodes.options(
+            "WavespeedImageUpscaleNode", "model"
+        ):
+            models.seedvr2_dit = ["SeedVR2"]
 
         inpaint_models = nodes.options("INPAINT_LoadInpaintModel", "model_name")
         available_resources.update(_find_inpaint_models(inpaint_models))

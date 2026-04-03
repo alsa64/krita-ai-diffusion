@@ -117,6 +117,7 @@ class UpscaleWidget(QWidget):
         self._model = root.active_model
         self._model_bindings = []
         root.connection.state_changed.connect(self.update_models)
+        root.connection.models_changed.connect(self.update_models)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 2, 4, 0)
@@ -208,6 +209,7 @@ class UpscaleWidget(QWidget):
         layout.addWidget(self.error_box)
 
         layout.addStretch()
+        self.update_models()
 
     @property
     def model(self):
@@ -254,7 +256,7 @@ class UpscaleWidget(QWidget):
                     name = file.rsplit(".", 1)[0]
                     self.model_select.addItem(name, file)
                 for file in sorted(client.models.seedvr2_dit):
-                    name = f"SeedVR2 ({file.rsplit('.', 1)[0]})"
+                    name = file if file == "SeedVR2" else f"SeedVR2 ({file.rsplit('.', 1)[0]})"
                     self.model_select.addItem(name, file)
                 selected = self.model_select.findData(self.model.upscale.upscaler)
                 self.model_select.setCurrentIndex(max(selected, 0))

@@ -401,10 +401,16 @@ class DocumentModel(QObject, ObservableProperties):
         params.upscale.model = params.upscale.model or client.models.default_upscaler
 
         is_seedvr2 = params.upscale.model in client.models.seedvr2_dit
+        uses_wavespeed_seedvr2 = (
+            is_seedvr2
+            and params.upscale.model == "SeedVR2"
+            and "WavespeedImageUpscaleNode" in client.models.node_inputs
+        )
         if is_seedvr2:
-            if not client.models.seedvr2_vae:
+            if not uses_wavespeed_seedvr2 and not client.models.seedvr2_vae:
                 raise PluginError(_("SeedVR2 VAE model not found on server"))
-            params.upscale.vae_model = client.models.seedvr2_vae[0]
+            if not uses_wavespeed_seedvr2:
+                params.upscale.vae_model = client.models.seedvr2_vae[0]
         elif params.upscale.model not in client.models.upscalers:
             msg = _("The upscale model used by the document is not available on the server")
             self.report_error(Error(ErrorKind.warning, msg + f": {params.upscale.model}"))
@@ -1291,7 +1297,8 @@ class UpscaleWorkspace(QObject, ObservableProperties):
     def _init_model(self):
         model = ensure(self._model())
         if client := model._connection.client_if_connected:
-            if self.upscaler not in client.models.upscalers:
+            available = set(client.models.upscalers) | set(client.models.seedvr2_dit)
+            if self.upscaler not in available:
                 self.upscaler = client.models.default_upscaler
 
     def set_in_progress(self, in_progress: bool):

@@ -1377,6 +1377,34 @@ def upscale_seedvr2(
     return w
 
 
+def upscale_seedvr2_wavespeed(
+    w: ComfyWorkflow,
+    image: Image,
+    extent: ExtentInput,
+    model: str,
+):
+    img = w.load_image(image)
+    longest_side = max(extent.target.width, extent.target.height)
+    if longest_side <= 2048:
+        target_resolution = "2K"
+    elif longest_side <= 4096:
+        target_resolution = "4K"
+    else:
+        target_resolution = "8K"
+
+    img = w.add(
+        "WavespeedImageUpscaleNode",
+        1,
+        image=img,
+        model=model,
+        target_resolution=target_resolution,
+    )
+    if extent.input != extent.target:
+        img = w.scale_image(img, extent.target)
+    w.send_image(img)
+    return w
+
+
 def upscale_seedvr2_tiled(
     w: ComfyWorkflow,
     image: Output,
@@ -1952,6 +1980,8 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
         return upscale_simple(workflow, i.image, ensure(i.upscale).model, i.upscale_factor)
     elif i.kind is WorkflowKind.upscale_seedvr2:
         upscale = ensure(i.upscale)
+        if "WavespeedImageUpscaleNode" in models.node_inputs and upscale.model == "SeedVR2":
+            return upscale_seedvr2_wavespeed(workflow, i.image, i.extent, upscale.model)
         return upscale_seedvr2(
             workflow,
             i.image,
