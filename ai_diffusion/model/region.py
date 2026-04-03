@@ -134,6 +134,8 @@ class Region(QObject, ObservableProperties):
 
     @staticmethod
     def link_target(layer: Layer):
+        if layer.type.is_mask and layer.parent_layer is not None:
+            layer = layer.parent_layer
         if layer.type is LayerType.group:
             return layer
         if parent := layer.parent_layer:

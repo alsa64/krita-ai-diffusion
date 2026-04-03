@@ -809,21 +809,27 @@ class DocumentModel(QObject, ObservableProperties):
 
         bounds = Bounds(*params.bounds.offset, *image.extent)
         if len(params.regions) == 0 or region_behavior is ApplyRegionBehavior.none:
+            target = self._apply_target_layer(self.layers.active)
             if behavior is ApplyBehavior.replace:
-                self.layers.update_layer_image(self.layers.active, image, bounds)
+                self.layers.update_layer_image(target, image, bounds)
             else:
                 name = f"{prefix}{trim_text(params.name, 200)} ({params.seed})"
-                pos = self.layers.active if behavior is ApplyBehavior.layer_active else None
+                pos = target if behavior is ApplyBehavior.layer_active else None
                 self.layers.create(name, image, bounds, above=pos)
         else:  # apply to regions
             with RestoreActiveLayer(self.layers) as restore:
-                active_id = Region.link_target(self.layers.active).id_string
+                active_id = self._apply_target_layer(self.layers.active).id_string
                 for job_region in params.regions:
                     result = self.create_result_layer(
                         image, params, job_region, region_behavior, prefix
                     )
                     if job_region.layer_id == active_id:
                         restore.target = result
+
+    def _apply_target_layer(self, layer: Layer):
+        if layer.type.is_mask and layer.parent_layer is not None:
+            layer = layer.parent_layer
+        return Region.link_target(layer)
 
     def create_result_layer(
         self,
@@ -835,6 +841,7 @@ class DocumentModel(QObject, ObservableProperties):
     ):
         name = f"{prefix}{job_region.prompt} ({params.seed})"
         region_layer = self.layers.find(QUuid(job_region.layer_id)) or self.layers.root
+        region_layer = self._apply_target_layer(region_layer)
         # a previous apply from the same batch may have already created groups and re-linked
         region_layer = Region.link_target(region_layer)
 
