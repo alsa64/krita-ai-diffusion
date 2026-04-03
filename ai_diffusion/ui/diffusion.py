@@ -302,6 +302,12 @@ class ImageDiffusionWidget(DockWidget):
         root.auto_update.state_changed.connect(self.update_content)
         root.model_created.connect(self.register_model)
 
+        notifier = Krita.instance().notifier()
+        notifier.imageCreated.connect(lambda *_: self.update_content())
+        notifier.imageClosed.connect(lambda *_: self.update_content())
+        notifier.viewCreated.connect(lambda *_: self.update_content())
+        notifier.viewClosed.connect(lambda *_: self.update_content())
+
     def canvasChanged(self, canvas: krita.Canvas):
         if canvas is not None and canvas.view() is not None:
             eventloop.run(self._update_active_document())
