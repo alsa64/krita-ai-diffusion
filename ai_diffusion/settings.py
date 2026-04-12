@@ -315,6 +315,11 @@ class Settings(QObject):
         _("Prompt Line Count"), 2, _("Size of the text editor for image descriptions")
     )
 
+    negative_prompt_line_count: int
+    _negative_prompt_line_count = Setting(
+        _("Negative Prompt Line Count"), 3, _("Size of the text editor for negative prompts")
+    )
+
     prompt_line_count_live: int
     _prompt_line_count_live = Setting("Prompt Line Count (Live)", 2)
 

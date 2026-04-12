@@ -134,7 +134,9 @@ class ActiveRegionWidget(QFrame):
         self.positive.handle_dragged.connect(self._handle_dragging)
         self.positive.installEventFilter(self)
 
-        self.negative = TextPromptWidget(line_count=1, is_negative=True, parent=self)
+        self.negative = TextPromptWidget(
+            line_count=settings.negative_prompt_line_count, is_negative=True, parent=self
+        )
         self.negative.handle_dragged.connect(self._handle_dragging)
         self.negative.installEventFilter(self)
 
@@ -358,7 +360,7 @@ class ActiveRegionWidget(QFrame):
         return settings.show_negative_prompt and isinstance(self._region, RootRegion)
 
     def update_settings(self, key: str, value):
-        if key in {"prompt_line_count", "prompt_line_count_live"}:
+        if key in {"prompt_line_count", "prompt_line_count_live", "negative_prompt_line_count"}:
             self._update_prompt_widgets()
         elif key == "show_negative_prompt":
             self.negative.text = ""
@@ -418,6 +420,7 @@ class ActiveRegionWidget(QFrame):
             self.positive.line_count = max(1, settings.prompt_line_count_live - 1)
         else:
             self.positive.line_count = settings.prompt_line_count_live
+        self.negative.line_count = settings.negative_prompt_line_count
         self.negative.setVisible(self.has_negative)
         self._layout_language_button()
         self._setup_resize_handle()
@@ -454,14 +457,16 @@ class ActiveRegionWidget(QFrame):
         self.negative.is_resizable = self.has_negative and can_resize
 
     def _handle_dragging(self, y_pos: int):
-        # math determined experimentally, sorry :(
-        if self.has_negative:
-            pos_height = self.positive.contentsRect().height()
-            neg_height = self.negative.contentsRect().height()
-            new_height = y_pos - neg_height + pos_height - 10
-        else:
-            new_height = y_pos - 5
         fm = QFontMetrics(ensure(self.positive.document()).defaultFont())
+        if self.has_negative:
+            new_height = y_pos - self.negative.y() - 5
+            new_line_count = round(new_height / fm.lineSpacing())
+            if 1 <= new_line_count <= 10:
+                settings.negative_prompt_line_count = new_line_count
+                self._update_prompt_widgets()
+            return
+
+        new_height = y_pos - 5
         new_line_count = round(new_height / fm.lineSpacing())
         if 1 <= new_line_count <= theme.prompt_max_line_count:
             if self.is_slim:

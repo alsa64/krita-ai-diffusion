@@ -19,10 +19,16 @@ def test_get_set():
     assert (
         s.history_size == Settings._history_size.default
         and s.server_mode == Settings._server_mode.default
+        and s.negative_prompt_line_count == Settings._negative_prompt_line_count.default
     )
     s.history_size = 5
     s.server_mode = ServerMode.external
-    assert s.history_size == 5 and s.server_mode == ServerMode.external
+    s.negative_prompt_line_count = 4
+    assert (
+        s.history_size == 5
+        and s.server_mode == ServerMode.external
+        and s.negative_prompt_line_count == 4
+    )
 
 
 def test_restore():
@@ -40,6 +46,7 @@ def test_save():
     original.history_size = 5
     original.server_mode = ServerMode.external
     original.performance_preset = PerformancePreset.low
+    original.negative_prompt_line_count = 4
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -49,6 +56,7 @@ def test_save():
         result.history_size == 5
         and result.server_mode == ServerMode.external
         and result.performance_preset == PerformancePreset.low
+        and result.negative_prompt_line_count == 4
     )
 
 
