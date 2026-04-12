@@ -31,7 +31,7 @@ from ai_diffusion.backend.workflow import detect_inpaint
 from ai_diffusion.files import File, FileCollection, FileLibrary, FileSource
 from ai_diffusion.image import Bounds, Extent, Image, ImageCollection, Mask
 from ai_diffusion.pose import Pose
-from ai_diffusion.settings import PerformanceSettings
+from ai_diffusion.settings import PerformanceSettings, settings
 from ai_diffusion.style import Arch, Style
 from ai_diffusion.text import extract_layers
 from ai_diffusion.util import ensure
@@ -306,6 +306,50 @@ def test_prepare_lora():
     assert LoraInput("MOTHER_OF_PEARL.safetensors", 0.33) in job.models.loras
     assert LoraInput("PINK_UNICORNS.safetensors", 0.77) in result.loras
     assert LoraInput("x/FRACTAL.safetensors", 0.55) in result.loras
+
+
+def test_prepare_selects_color_match_setting(monkeypatch):
+    models = ClientModels()
+    models.checkpoints = {
+        "GEN": CheckpointInfo("GEN", Arch.sd15),
+        "EDIT": CheckpointInfo("EDIT", Arch.qwen_l),
+    }
+
+    generation_style = Style(Path("generation.json"))
+    generation_style.checkpoints = ["GEN"]
+    edit_style = Style(Path("edit.json"))
+    edit_style.checkpoints = ["EDIT"]
+
+    files = FileLibrary(FileCollection(), FileCollection())
+    cond = ConditioningInput("")
+    image = Image.create(Extent(512, 512))
+
+    monkeypatch.setattr(settings, "color_match_generation", False)
+    monkeypatch.setattr(settings, "color_match_edit", True)
+
+    generation_job = workflow.prepare(
+        WorkflowKind.generate,
+        Extent(512, 512),
+        cond,
+        generation_style,
+        seed=1,
+        perf=default_perf,
+        models=models,
+        files=files,
+    )
+    edit_job = workflow.prepare(
+        WorkflowKind.refine,
+        image,
+        cond,
+        edit_style,
+        seed=1,
+        perf=default_perf,
+        models=models,
+        files=files,
+    )
+
+    assert generation_job.color_match == 0.0
+    assert edit_job.color_match == 1.0
 
 
 def test_prepare_negative():

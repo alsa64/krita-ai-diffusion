@@ -20,14 +20,20 @@ def test_get_set():
         s.history_size == Settings._history_size.default
         and s.server_mode == Settings._server_mode.default
         and s.negative_prompt_line_count == Settings._negative_prompt_line_count.default
+        and s.color_match_generation == Settings._color_match_generation.default
+        and s.color_match_edit == Settings._color_match_edit.default
     )
     s.history_size = 5
     s.server_mode = ServerMode.external
     s.negative_prompt_line_count = 4
+    s.color_match_generation = False
+    s.color_match_edit = True
     assert (
         s.history_size == 5
         and s.server_mode == ServerMode.external
         and s.negative_prompt_line_count == 4
+        and not s.color_match_generation
+        and s.color_match_edit
     )
 
 
@@ -47,6 +53,8 @@ def test_save():
     original.server_mode = ServerMode.external
     original.performance_preset = PerformancePreset.low
     original.negative_prompt_line_count = 4
+    original.color_match_generation = False
+    original.color_match_edit = True
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -57,6 +65,8 @@ def test_save():
         and result.server_mode == ServerMode.external
         and result.performance_preset == PerformancePreset.low
         and result.negative_prompt_line_count == 4
+        and not result.color_match_generation
+        and result.color_match_edit
     )
 
 
