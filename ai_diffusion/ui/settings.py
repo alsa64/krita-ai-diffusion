@@ -682,7 +682,14 @@ class DiffusionSettings(SettingsTab):
         self.add("selection_feather", SliderSetting(S._selection_feather, self, 0, 25, "{} %"))
         self.add("selection_blend", SliderSetting(S._selection_blend, self, 0, 100, "{} px"))
         self.add("selection_padding", SliderSetting(S._selection_padding, self, 0, 25, "{} %"))
-        self.add("color_match", SwitchSetting(S._color_match, parent=self))
+        self.add(
+            "color_match_generation",
+            SwitchSetting(S._color_match_generation, parent=self),
+        )
+        self.add(
+            "color_match_edit",
+            SwitchSetting(S._color_match_edit, parent=self),
+        )
         self.add("nsfw_filter", ComboBoxSetting(S._nsfw_filter, parent=self))
 
         nsfw_settings = [(_("Disabled"), 0.0), (_("Basic"), 0.65), (_("Strict"), 0.8)]

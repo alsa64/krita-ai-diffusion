@@ -1874,7 +1874,11 @@ def prepare(
 
     i.batch_count = 1 if is_live else i.batch_count
     i.images.layer_count = layer_count if arch is Arch.qwen_l else 1
-    i.color_match = 1.0 if settings.color_match else 0.0
+    i.color_match = (
+        1.0
+        if (settings.color_match_edit if arch.is_edit else settings.color_match_generation)
+        else 0.0
+    )
     i.nsfw_filter = settings.nsfw_filter
     return i
 

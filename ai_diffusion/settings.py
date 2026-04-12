@@ -244,11 +244,22 @@ class Settings(QObject):
         _("Selection Padding"), 6, _("Minimum additional padding around the selection area")
     )
 
-    color_match: bool
-    _color_match = Setting(
-        _("Color Match"),
+    color_match_generation: bool
+    _color_match_generation = Setting(
+        _("Color Match (Generation Models)"),
         True,
-        _("Match peripheral colors and brightness with existing content. Requires a selection."),
+        _(
+            "Match peripheral colors and brightness with existing content for generation models. Requires a selection."
+        ),
+    )
+
+    color_match_edit: bool
+    _color_match_edit = Setting(
+        _("Color Match (Edit Models)"),
+        True,
+        _(
+            "Match peripheral colors and brightness with existing content for edit models. Requires a selection."
+        ),
     )
 
     nsfw_filter: float
