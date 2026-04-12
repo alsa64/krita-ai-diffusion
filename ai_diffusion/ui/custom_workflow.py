@@ -309,7 +309,11 @@ class PromptParamWidget(TextPromptWidget):
     value_changed = pyqtSignal()
 
     def __init__(self, param: CustomParam, parent: QWidget | None = None):
-        line_count = settings.prompt_line_count if param.kind is ParamKind.prompt_positive else 2
+        line_count = (
+            settings.prompt_line_count
+            if param.kind is ParamKind.prompt_positive
+            else settings.negative_prompt_line_count
+        )
         super().__init__(
             is_negative=param.kind is ParamKind.prompt_negative,
             line_count=line_count,
@@ -346,14 +350,22 @@ class PromptParamWidget(TextPromptWidget):
         self.text = value
 
     def update_settings(self, key: str, value):
-        if key == "prompt_line_count" and self.param.kind is ParamKind.prompt_positive:
+        setting_key = (
+            "prompt_line_count"
+            if self.param.kind is ParamKind.prompt_positive
+            else "negative_prompt_line_count"
+        )
+        if key == setting_key:
             self.line_count = value
 
     def _handle_dragging(self, y_pos: int):
         fm = QFontMetrics(ensure(self.document()).defaultFont())
         new_line_count = round((y_pos - 5) / fm.lineSpacing())
         if 1 <= new_line_count <= theme.prompt_max_line_count:
-            settings.prompt_line_count = new_line_count
+            if self.param.kind is ParamKind.prompt_positive:
+                settings.prompt_line_count = new_line_count
+            else:
+                settings.negative_prompt_line_count = new_line_count
             self.line_count = new_line_count
 
 

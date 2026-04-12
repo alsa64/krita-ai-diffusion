@@ -717,6 +717,10 @@ class InterfaceSettings(SettingsTab):
             SpinBoxSetting(S._prompt_line_count, self, 1, prompt_max_line_count),
         )
         self.add(
+            "negative_prompt_line_count",
+            SpinBoxSetting(S._negative_prompt_line_count, self, 1, 10),
+        )
+        self.add(
             "show_negative_prompt",
             SwitchSetting(S._show_negative_prompt, (_("Show"), _("Hide")), self),
         )

@@ -57,7 +57,9 @@ class AnimationWidget(QWidget):
         self.prompt_textbox = TextPromptWidget(parent=self)
         self.prompt_textbox.line_count = settings.prompt_line_count
 
-        self.negative_textbox = TextPromptWidget(line_count=1, is_negative=True, parent=self)
+        self.negative_textbox = TextPromptWidget(
+            line_count=settings.negative_prompt_line_count, is_negative=True, parent=self
+        )
         self.negative_textbox.setVisible(settings.show_negative_prompt)
 
         prompt_layout = QVBoxLayout()
@@ -164,6 +166,8 @@ class AnimationWidget(QWidget):
     def update_settings(self, key: str, value):
         if key == "prompt_line_count":
             self.prompt_textbox.line_count = value
+        elif key == "negative_prompt_line_count":
+            self.negative_textbox.line_count = value
         elif key == "show_negative_prompt":
             self.negative_textbox.text = ""
             self.negative_textbox.setVisible(value)
