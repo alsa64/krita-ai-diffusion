@@ -14,14 +14,15 @@ from ai_diffusion.backend.api import (
     WorkflowInput,
     WorkflowKind,
 )
-from ai_diffusion.backend.client import ClientEvent, resolve_arch
+from ai_diffusion.backend.client import ClientEvent, ClientModels, resolve_arch
 from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_url
 from ai_diffusion.backend.network import NetworkError
-from ai_diffusion.backend.resources import ControlMode
+from ai_diffusion.backend.resources import ControlMode, ResourceKind, UpscalerName, resource_id
 from ai_diffusion.backend.server import Server, ServerBackend, ServerState
 from ai_diffusion.files import File, FileFormat, FileLibrary
 from ai_diffusion.image import Extent
 from ai_diffusion.platform_tools import get_cuda_devices
+from ai_diffusion.settings import settings
 from ai_diffusion.style import Arch, Style
 from ai_diffusion.util import ensure
 
@@ -161,6 +162,38 @@ def check_client_info(client: ComfyClient):
     assert len(client.models.resources) >= len(resources.required_resource_ids)
     inpaint = client.models.for_arch(Arch.sd15).control[ControlMode.inpaint]
     assert inpaint and "inpaint" in inpaint
+
+
+def test_configurable_default_upscalers(monkeypatch):
+    models = ClientModels()
+    models.upscalers = ["custom-default.pth", "custom-small.pth"]
+    models.resources = {
+        resource_id(
+            ResourceKind.upscaler, Arch.all, UpscalerName.default
+        ): UpscalerName.default.value,
+        resource_id(
+            ResourceKind.upscaler, Arch.all, UpscalerName.fast_2x
+        ): UpscalerName.fast_2x.value,
+    }
+
+    monkeypatch.setattr(settings, "upscale_model", "custom-default.pth")
+    monkeypatch.setattr(settings, "upscale_model_small", "custom-small.pth")
+    assert models.default_upscaler == "custom-default.pth"
+    assert models.default_upscaler_small == "custom-small.pth"
+
+
+def test_configurable_default_upscalers_fall_back(monkeypatch):
+    models = ClientModels()
+    models.upscalers = ["available-only.pth"]
+    models.resources = {
+        resource_id(ResourceKind.upscaler, Arch.all, UpscalerName.default): "fallback-default.pth",
+        resource_id(ResourceKind.upscaler, Arch.all, UpscalerName.fast_2x): "fallback-small.pth",
+    }
+
+    monkeypatch.setattr(settings, "upscale_model", "missing-default.pth")
+    monkeypatch.setattr(settings, "upscale_model_small", "missing-small.pth")
+    assert models.default_upscaler == "fallback-default.pth"
+    assert models.default_upscaler_small == "fallback-small.pth"
 
 
 def check_resolve_sd_version(client: ComfyClient, arch: Arch):
