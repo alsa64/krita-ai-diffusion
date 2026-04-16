@@ -55,6 +55,8 @@ def test_save():
     original.negative_prompt_line_count = 4
     original.color_match_generation = False
     original.color_match_edit = True
+    original.upscale_model = "custom-default.pth"
+    original.upscale_model_small = "custom-small.pth"
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -67,6 +69,8 @@ def test_save():
         and result.negative_prompt_line_count == 4
         and not result.color_match_generation
         and result.color_match_edit
+        and result.upscale_model == "custom-default.pth"
+        and result.upscale_model_small == "custom-small.pth"
     )
 
 

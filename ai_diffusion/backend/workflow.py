@@ -839,10 +839,10 @@ def scale_refine_and_decode(
     model = apply_regional_ip_adapter(w, model, cond.regions, extent.desired, models)
 
     if mode is ScaleMode.upscale_small:
-        upscaler = models.upscale[UpscalerName.fast_2x]
+        upscaler = models.all.default_upscaler_small
     else:
         assert mode is ScaleMode.upscale_quality
-        upscaler = models.upscale[UpscalerName.default]
+        upscaler = models.all.default_upscaler
 
     upscale_model = w.load_upscale_model(upscaler)
     decoded = vae_decode(w, vae, latent, tiled_vae)
@@ -1100,9 +1100,9 @@ def inpaint(
     if extent.refinement_scaling in [ScaleMode.upscale_small, ScaleMode.upscale_quality]:
         model = model_orig
         if extent.refinement_scaling is ScaleMode.upscale_small:
-            upscaler = models.upscale[UpscalerName.fast_2x]
+            upscaler = models.all.default_upscaler_small
         else:
-            upscaler = models.upscale[UpscalerName.default]
+            upscaler = models.all.default_upscaler
         upscale_mask = cropped_mask
         if crop_upscale_extent != target_bounds.extent:
             upscale_mask = w.scale_mask(cropped_mask, crop_upscale_extent)

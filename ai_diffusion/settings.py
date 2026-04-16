@@ -288,6 +288,20 @@ class Settings(QObject):
         _("When saving generated images from thumbnails, include metadata in the PNG"),
     )
 
+    upscale_model: str
+    _upscale_model = Setting(
+        _("Default Upscale Model"),
+        "4x_NMKD-Superscale-SP_178000_G.pth",
+        _("Default model for tiled upscaling and quality refinement passes."),
+    )
+
+    upscale_model_small: str
+    _upscale_model_small = Setting(
+        _("Default Upscale Model (Small)"),
+        "OmniSR_X2_DIV2K.safetensors",
+        _("Default model for small automatic upscaling refinement passes."),
+    )
+
     save_image_format: ImageFileFormat
     _save_image_format = Setting(
         _("Save Image Format"),

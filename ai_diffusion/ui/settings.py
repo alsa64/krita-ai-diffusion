@@ -690,15 +690,33 @@ class DiffusionSettings(SettingsTab):
             "color_match_edit",
             SwitchSetting(S._color_match_edit, parent=self),
         )
+        self.add("upscale_model", ComboBoxSetting(S._upscale_model, parent=self))
+        self.add("upscale_model_small", ComboBoxSetting(S._upscale_model_small, parent=self))
         self.add("nsfw_filter", ComboBoxSetting(S._nsfw_filter, parent=self))
 
         nsfw_settings = [(_("Disabled"), 0.0), (_("Basic"), 0.65), (_("Strict"), 0.8)]
         self._widgets["nsfw_filter"].set_items(nsfw_settings)
+        root.connection.models_changed.connect(self.update_upscalers)
+        self.update_upscalers()
         DiffusionSettings._warning_shown = self._warning_shown or settings.nsfw_filter > 0
 
         self._layout.addStretch()
 
     _warning_shown = False
+
+    def update_upscalers(self):
+        upscalers = []
+        if client := root.connection.client_if_connected:
+            upscalers = sorted(client.models.upscalers, key=str.lower)
+        for value in [settings.upscale_model, settings.upscale_model_small]:
+            if value and value not in upscalers:
+                upscalers.append(value)
+
+        items = [(model.rsplit(".", 1)[0], model) for model in upscalers]
+        for name in ["upscale_model", "upscale_model_small"]:
+            widget: ComboBoxSetting = self._widgets[name]
+            widget.set_items(items)
+            widget.value = getattr(settings, name)
 
     def _write(self):
         if self._widgets["nsfw_filter"].value > 0 and not self._warning_shown:

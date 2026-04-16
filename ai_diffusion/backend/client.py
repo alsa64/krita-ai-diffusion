@@ -15,7 +15,7 @@ from ..files import FileFormat, FileLibrary
 from ..image import ImageCollection, Point
 from ..localization import translate as _
 from ..model.properties import ObservableProperties, Property
-from ..settings import PerformanceSettings
+from ..settings import PerformanceSettings, settings
 from ..style import Style
 from ..util import PluginError, ensure
 from ..util import client_logger as log
@@ -281,7 +281,16 @@ class ClientModels:
 
     @property
     def default_upscaler(self):
-        return self.resource(ResourceKind.upscaler, UpscalerName.default, Arch.all)
+        return self._resolve_upscaler(settings.upscale_model, UpscalerName.default)
+
+    @property
+    def default_upscaler_small(self):
+        return self._resolve_upscaler(settings.upscale_model_small, UpscalerName.fast_2x)
+
+    def _resolve_upscaler(self, configured: str, fallback: UpscalerName):
+        if configured in self.upscalers:
+            return configured
+        return self.resource(ResourceKind.upscaler, fallback, Arch.all)
 
 
 class ModelDict:
