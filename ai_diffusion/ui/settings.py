@@ -1360,6 +1360,30 @@ class AdvancedSettings(SettingsTab):
             "download_inactivity_timeout",
             SpinBoxSetting(S._download_inactivity_timeout, self, 5, 600, suffix=" s"),
         )
+        self.add(
+            "comfy_get_timeout",
+            SpinBoxSetting(S._comfy_get_timeout, self, 1, 600, suffix=" s"),
+        )
+        self.add(
+            "comfy_result_image_timeout",
+            SpinBoxSetting(S._comfy_result_image_timeout, self, 1, 1800, suffix=" s"),
+        )
+        self.add(
+            "cloud_sign_in_timeout",
+            SpinBoxSetting(S._cloud_sign_in_timeout, self, 5, 1800, suffix=" s"),
+        )
+        self.add(
+            "cloud_auth_poll_interval",
+            DoubleSpinBoxSetting(S._cloud_auth_poll_interval, self, 0.1, 60.0, 0.1, 1, " s"),
+        )
+        self.add(
+            "cloud_job_poll_interval",
+            DoubleSpinBoxSetting(S._cloud_job_poll_interval, self, 0.1, 60.0, 0.1, 1, " s"),
+        )
+        self.add(
+            "auto_update_check_timeout",
+            SpinBoxSetting(S._auto_update_check_timeout, self, 1, 600, suffix=" s"),
+        )
         self._layout.addStretch()
 
 

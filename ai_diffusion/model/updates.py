@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from .. import __version__, eventloop
 from ..backend.network import RequestManager
 from ..platform_tools import ZipFile
+from ..settings import settings
 from ..util import client_logger as log
 from .properties import ObservableProperties, Property
 
@@ -72,7 +73,8 @@ class AutoUpdate(QObject, ObservableProperties):
         self.state = UpdateState.checking
         log.info(f"Checking for latest plugin version at {self.api_url}")
         result = await self._net.get(
-            f"{self.api_url}/plugin/latest?version={self.current_version}", timeout=10
+            f"{self.api_url}/plugin/latest?version={self.current_version}",
+            timeout=settings.auto_update_check_timeout,
         )
         self.latest_version = result.get("version")
         if not self.latest_version:

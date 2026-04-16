@@ -117,9 +117,12 @@ class CloudClient(Client):
         auth_confirm = await self._post("auth/confirm", {"client_id": client_id})
         time = datetime.now(timezone.utc)
         while auth_confirm["status"] == "not-found":
-            if (datetime.now(timezone.utc) - time).seconds > 300:
-                raise TimeoutError(_("Sign-in attempt timed out after 5 minutes"))
-            await asyncio.sleep(2)
+            if (datetime.now(timezone.utc) - time).seconds > settings.cloud_sign_in_timeout:
+                minutes = settings.cloud_sign_in_timeout / 60
+                raise TimeoutError(
+                    _("Sign-in attempt timed out after {minutes:.1f} minutes", minutes=minutes)
+                )
+            await asyncio.sleep(settings.cloud_auth_poll_interval)
             auth_confirm = await self._post("auth/confirm", {"client_id": client_id})
 
         if auth_confirm["status"] == "authorized":
@@ -261,7 +264,7 @@ class CloudClient(Client):
 
             if job.state is JobState.cancelled:
                 break
-            await asyncio.sleep(_poll_interval)
+            await asyncio.sleep(settings.cloud_job_poll_interval)
 
         if status == "completed":
             job.output = response["output"]
@@ -494,6 +497,3 @@ def apply_limits(work: WorkflowInput, features: ClientFeatures):
 
 def _base64_size(size: int):
     return math.ceil(size / 3) * 4
-
-
-_poll_interval = 0.5  # seconds

@@ -596,6 +596,48 @@ class Settings(QObject):
         _("Abort a download if no progress is received for this many seconds."),
     )
 
+    comfy_get_timeout: int
+    _comfy_get_timeout = Setting(
+        _("Comfy GET Timeout"),
+        60,
+        _("Timeout in seconds for ComfyUI GET requests."),
+    )
+
+    comfy_result_image_timeout: int
+    _comfy_result_image_timeout = Setting(
+        _("Comfy Result Image Timeout"),
+        300,
+        _("Timeout in seconds for downloading generated result images from ComfyUI."),
+    )
+
+    cloud_sign_in_timeout: int
+    _cloud_sign_in_timeout = Setting(
+        _("Cloud Sign-In Timeout"),
+        300,
+        _("How long to wait for cloud sign-in confirmation before failing."),
+    )
+
+    cloud_auth_poll_interval: float
+    _cloud_auth_poll_interval = Setting(
+        _("Cloud Auth Poll Interval"),
+        2.0,
+        _("Delay in seconds between cloud sign-in confirmation requests."),
+    )
+
+    cloud_job_poll_interval: float
+    _cloud_job_poll_interval = Setting(
+        _("Cloud Job Poll Interval"),
+        0.5,
+        _("Delay in seconds between cloud job status checks."),
+    )
+
+    auto_update_check_timeout: int
+    _auto_update_check_timeout = Setting(
+        _("Auto-Update Check Timeout"),
+        10,
+        _("Timeout in seconds for checking whether a plugin update is available."),
+    )
+
     flux_inpaint_cfg_scale: float
     _flux_inpaint_cfg_scale = Setting(
         _("Flux Inpaint CFG Override"),

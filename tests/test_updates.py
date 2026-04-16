@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from aiohttp import ClientSession
@@ -7,6 +8,7 @@ from PyQt5.QtCore import pyqtBoundSignal
 
 from ai_diffusion.model.updates import AutoUpdate, UpdateState
 from ai_diffusion.platform_tools import ZipFile
+from ai_diffusion.settings import settings
 
 from .conftest import CloudService, qtapp
 
@@ -118,3 +120,21 @@ async def test_authorization(cloud_service: CloudService):
         # Upload requires authorization
         async with session.put("/plugin/upload/1.2.3") as response:
             assert response.status == 401
+
+
+@pytest.mark.asyncio
+async def test_auto_update_uses_configured_check_timeout(monkeypatch):
+    calls = []
+
+    async def fake_get(url, timeout=None, bearer=None):
+        calls.append((url, timeout, bearer))
+        return {"version": "1.50.6"}
+
+    updater = AutoUpdate(current_version="1.50.6", api_url="https://example.com")
+    updater._request_manager = SimpleNamespace(get=fake_get)
+    monkeypatch.setattr(settings, "auto_update_check_timeout", 42)
+
+    await updater.check()
+
+    assert calls == [("https://example.com/plugin/latest?version=1.50.6", 42, None)]
+    assert updater.state is UpdateState.latest

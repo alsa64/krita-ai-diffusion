@@ -276,7 +276,8 @@ class ComfyClient(Client):
         async for __ in self.discover_models(refresh=True):
             pass
 
-    async def _get(self, op: str, timeout: float | None = 60):
+    async def _get(self, op: str, timeout: float | None = None):
+        timeout = settings.comfy_get_timeout if timeout is None else timeout
         return await self._requests.get(f"{self.url}/{op}", timeout=timeout)
 
     async def _post(self, op: str, data: dict):
@@ -546,7 +547,9 @@ class ComfyClient(Client):
 
     async def _transfer_result_image(self, id: str):
         try:
-            data = await self._requests.download(f"{self.url}/api/etn/image/{id}", timeout=300)
+            data = await self._requests.download(
+                f"{self.url}/api/etn/image/{id}", timeout=settings.comfy_result_image_timeout
+            )
             return Image.from_bytes(data)
         except Exception as e:
             log.error(f"Error transferring result image {self.url}/api/etn/image/{id}: {e!s}")
