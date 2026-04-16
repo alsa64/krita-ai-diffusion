@@ -8,6 +8,7 @@ import pytest
 
 from ai_diffusion.backend import workflow
 from ai_diffusion.backend.api import (
+    CheckpointInput,
     ConditioningInput,
     ControlInput,
     CustomWorkflowInput,
@@ -279,6 +280,17 @@ def test_anima_lllite_control_workflow():
     assert w.root[str(model.node - 1)]["inputs"]["weights"] == "anima-lllite-anytest.safetensors"
     assert any(n["class_type"] == "ETN_control_load" for n in w.root.values())
     assert not any(n["class_type"] == "ControlNetLoader" for n in w.root.values())
+
+
+def test_flux_inpaint_cfg_override(monkeypatch):
+    checkpoint = CheckpointInput("flux.safetensors", version=Arch.flux, dynamic_caching=True)
+    sampling = SamplingInput("euler", "normal", cfg_scale=7.0, total_steps=20)
+
+    monkeypatch.setattr(settings, "flux_inpaint_cfg_scale", 24.5)
+    workflow.apply_inpaint_model_overrides(checkpoint, sampling, Arch.flux, is_inpaint_model=True)
+
+    assert not checkpoint.dynamic_caching
+    assert sampling.cfg_scale == 24.5
 
 
 def test_prepare_lora():

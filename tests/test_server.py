@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from PyQt5.QtNetwork import QNetworkAccessManager
+from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkReply
 
 from ai_diffusion.backend import network, resources, server
 from ai_diffusion.backend.resources import VerificationState
@@ -17,6 +17,7 @@ from ai_diffusion.backend.server import (
     model_dirs,
 )
 from ai_diffusion.platform_tools import get_cuda_devices
+from ai_diffusion.settings import settings
 from ai_diffusion.style import Arch
 
 from .config import server_dir
@@ -47,6 +48,36 @@ async def test_download(mode):
             elif progress and progress.total == 0:
                 assert progress.value == -1
         assert got_finished and path.exists() and path.stat().st_size > 0
+
+
+def test_download_retries_honor_settings(qtapp, monkeypatch, tmp_path):
+    attempts: list[int] = []
+    delays: list[int] = []
+
+    async def fake_try_download(_network, _url, _path):
+        attempts.append(len(attempts))
+        if len(attempts) < 3:
+            raise network.NetworkError(QNetworkReply.NetworkError.TimeoutError, "timeout", "url")
+        yield None
+
+    async def fake_sleep(delay):
+        delays.append(delay)
+
+    async def main():
+        monkeypatch.setattr(settings, "download_retry_attempts", 4)
+        monkeypatch.setattr(settings, "download_retry_delay", 7)
+        monkeypatch.setattr(network, "_try_download", fake_try_download)
+        monkeypatch.setattr(network.asyncio, "sleep", fake_sleep)
+
+        async for _ in network.download(
+            None, "https://example.invalid/file", tmp_path / "file.bin"
+        ):
+            pass
+
+    qtapp.run(main())
+
+    assert len(attempts) == 3
+    assert delays == [7, 7]
 
 
 def clear_test_server():

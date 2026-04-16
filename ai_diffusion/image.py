@@ -598,7 +598,11 @@ class Image:
         if not qt_supports_webp():
             format = format.no_webp_fallback
         format_str = format.extension
-        quality = override_quality if override_quality is not None else format.quality
+        quality = (
+            override_quality
+            if override_quality is not None
+            else settings.image_format_quality(format)
+        )
         writer = QImageWriter(buffer, QByteArray(format_str.encode("utf-8")))
         writer.setQuality(quality)
         result = writer.write(self._qimage)

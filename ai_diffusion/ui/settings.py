@@ -1280,6 +1280,61 @@ class PerformanceSettings(SettingsTab):
         settings.live_delay_threshold = self._live_delay_threshold.value
 
 
+class AdvancedSettings(SettingsTab):
+    def __init__(self):
+        super().__init__(_("Advanced Settings"))
+
+        S = Settings
+        self.add("save_image_quality_png", SpinBoxSetting(S._save_image_quality_png, self, 0, 100))
+        self.add(
+            "save_image_quality_png_small",
+            SpinBoxSetting(S._save_image_quality_png_small, self, 0, 100),
+        )
+        self.add(
+            "save_image_quality_webp", SpinBoxSetting(S._save_image_quality_webp, self, 0, 100)
+        )
+        self.add(
+            "save_image_quality_webp_lossless",
+            SpinBoxSetting(S._save_image_quality_webp_lossless, self, 0, 100),
+        )
+        self.add(
+            "save_image_quality_jpeg", SpinBoxSetting(S._save_image_quality_jpeg, self, 0, 100)
+        )
+        self.add(
+            "selection_min_transition",
+            SpinBoxSetting(S._selection_min_transition, self, 0, 512, suffix=" px"),
+        )
+        self.add(
+            "selection_grow_offset",
+            SpinBoxSetting(S._selection_grow_offset, self, 0, 128, suffix=" px"),
+        )
+        self.add(
+            "flux_inpaint_cfg_scale",
+            SliderSetting(S._flux_inpaint_cfg_scale, self, 1.0, 50.0, "{}"),
+        )
+        self.add(
+            "server_connect_retry_attempts",
+            SpinBoxSetting(S._server_connect_retry_attempts, self, 0, 20),
+        )
+        self.add(
+            "server_connect_retry_delay",
+            SpinBoxSetting(S._server_connect_retry_delay, self, 0, 120, suffix=" s"),
+        )
+        self.add(
+            "download_retry_attempts",
+            SpinBoxSetting(S._download_retry_attempts, self, 1, 20),
+        )
+        self.add(
+            "download_retry_delay",
+            SpinBoxSetting(S._download_retry_delay, self, 0, 120, suffix=" s"),
+        )
+        self.add(
+            "download_inactivity_timeout",
+            SpinBoxSetting(S._download_inactivity_timeout, self, 5, 600, suffix=" s"),
+        )
+        self._layout.addStretch()
+
+
 class AboutSettings(SettingsTab):
     def __init__(self):
         super().__init__(_("Plugin Information and Updates"))
@@ -1503,6 +1558,7 @@ class SettingsDialog(QDialog):
         self.diffusion = DiffusionSettings()
         self.interface = InterfaceSettings()
         self.performance = PerformanceSettings()
+        self.advanced = AdvancedSettings()
         self.about = AboutSettings()
 
         self._stack = QStackedWidget(self)
@@ -1521,6 +1577,7 @@ class SettingsDialog(QDialog):
         create_list_item(_("Diffusion"), self.diffusion)
         create_list_item(_("Interface"), self.interface)
         create_list_item(_("Performance"), self.performance)
+        create_list_item(_("Advanced"), self.advanced)
         create_list_item(_("Plugin"), self.about)
 
         self._list.setCurrentRow(0)
@@ -1567,6 +1624,7 @@ class SettingsDialog(QDialog):
         self.diffusion.read()
         self.interface.read()
         self.performance.read()
+        self.advanced.read()
         self.about.read()
 
     def restore_defaults(self):

@@ -1011,6 +1011,14 @@ def inpaint_control(image: Output | ImageOutput, mask: Output | ImageOutput, arc
     return Control(ControlMode.inpaint, image, mask, strength, range)
 
 
+def apply_inpaint_model_overrides(
+    checkpoint: CheckpointInput, sampling: SamplingInput, arch: Arch, is_inpaint_model: bool
+):
+    if is_inpaint_model and arch is Arch.flux:
+        checkpoint.dynamic_caching = False
+        sampling.cfg_scale = settings.flux_inpaint_cfg_scale
+
+
 def inpaint(
     w: ComfyWorkflow,
     images: ImageInput,
@@ -1026,9 +1034,7 @@ def inpaint(
     extent = ScaledExtent.from_input(images.extent)  # for initial generation with large context
 
     is_inpaint_model = params.use_inpaint_model and models.find_control(ControlMode.inpaint) is None
-    if is_inpaint_model and models.arch is Arch.flux:
-        checkpoint.dynamic_caching = False  # doesn't seem to work with Flux fill model
-        sampling.cfg_scale = 30  # set Flux guidance to 30 (typical values don't work well)
+    apply_inpaint_model_overrides(checkpoint, sampling, models.arch, is_inpaint_model)
 
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
     model = w.differential_diffusion(model)

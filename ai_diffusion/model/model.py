@@ -75,6 +75,7 @@ from .properties import ObservableProperties, Property
 from .region import Region, RegionLink, RootRegion, get_region_inpaint_mask, process_regions
 
 
+
 class QueueMode(Enum):
     back = 0
     front = 1
@@ -1840,10 +1841,4 @@ def _save_job_result(model: DocumentModel, job: Job | None, index: int):
             filepath=path, metadata_text=metadata_text, format=settings.save_image_format
         )
     else:
-        quality = None
-        if settings.save_image_format is ImageFileFormat.webp:
-            quality = settings.save_image_quality_webp
-        elif settings.save_image_format is ImageFileFormat.jpeg:
-            quality = settings.save_image_quality_jpeg
-
-        base_image.save(path, settings.save_image_format, quality)
+        base_image.save(path, settings.save_image_format)
