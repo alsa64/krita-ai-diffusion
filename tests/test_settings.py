@@ -1,8 +1,30 @@
 import json
+import sys
+import types
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ai_diffusion.settings import PerformancePreset, ServerMode, Setting, Settings
+krita = types.ModuleType("krita")
+
+
+class _Krita:
+    @staticmethod
+    def instance():
+        return _Krita()
+
+
+krita.Krita = _Krita
+sys.modules.setdefault("krita", krita)
+
+from ai_diffusion.api import InpaintMode
+from ai_diffusion.defaults import defaults
+from ai_diffusion.model import Workspace
+from ai_diffusion.persistence import (
+    RecentlyUsedSync,
+    load_workspace_defaults,
+    save_workspace_defaults,
+)
+from ai_diffusion.settings import PerformancePreset, ServerMode, Setting, Settings, settings
 from ai_diffusion.style import (
     SamplerPreset,
     SamplerPresets,
@@ -10,6 +32,7 @@ from ai_diffusion.style import (
     Styles,
     StyleSettings,
     sort_recent_styles,
+    style_defaults_schema,
 )
 from ai_diffusion.style import legacy_map as style_legacy_map
 
@@ -188,6 +211,65 @@ def test_duplicate_style(tmp_path_factory):
 
     copy.loras[0] = {"name": "lora2", "strength": 2.0}
     assert copy.loras != original.loras
+
+
+def test_style_create_applies_style_defaults(tmp_path_factory):
+    original_path = defaults.path
+    defaults._path = tmp_path_factory.mktemp("defaults") / "defaults.json"
+    try:
+        defaults.write_section(
+            "style",
+            {"cfg_scale": 3.5, "style_prompt": "cinematic {prompt}"},
+            style_defaults_schema,
+        )
+
+        styles = Styles(tmp_path_factory.mktemp("builtin"), tmp_path_factory.mktemp("user"))
+        style = styles.create("custom.json")
+
+        assert style.cfg_scale == 3.5
+        assert style.style_prompt == "cinematic {prompt}"
+    finally:
+        defaults._path = original_path
+
+
+def test_workspace_defaults_roundtrip(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.generation,
+            {"batch_count": 3, "inpaint_mode": InpaintMode.custom.name},
+        )
+
+        values = load_workspace_defaults(Workspace.generation)
+
+        assert values["batch_count"] == 3
+        assert values["inpaint_mode"] is InpaintMode.custom
+        assert values["translation_enabled"] is True
+    finally:
+        defaults._path = original_path
+
+
+def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
+    original_path = defaults.path
+    previous_document_defaults = settings.document_defaults
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        settings.document_defaults = {
+            "style": "preset.json",
+            "batch_count": 5,
+            "inpaint_mode": InpaintMode.custom.name,
+        }
+
+        RecentlyUsedSync.from_settings()
+        values = load_workspace_defaults(Workspace.generation)
+
+        assert values["style"] == "preset.json"
+        assert values["batch_count"] == 5
+        assert values["inpaint_mode"] is InpaintMode.custom
+    finally:
+        settings.document_defaults = previous_document_defaults
+        defaults._path = original_path
 
 
 def test_sampler_presets(tmp_path_factory):

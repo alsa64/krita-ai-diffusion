@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QStyle,
     QStyleOption,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -38,14 +39,24 @@ from ..backend.client import Client, MissingResources, User
 from ..backend.cloud_client import CloudClient
 from ..backend.resources import Arch, ResourceId
 from ..backend.server import Server, ServerState
+from ..defaults import defaults
 from ..localization import Localization
 from ..localization import translate as _
 from ..model.connection import ConnectionState, apply_performance_preset
+from ..model.model import Workspace
 from ..model.properties import Binding
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
+from ..persistence import (
+    animation_defaults_schema,
+    generation_defaults_schema,
+    live_defaults_schema,
+    load_workspace_defaults,
+    save_workspace_defaults,
+    upscaling_defaults_schema,
+)
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
-from ..style import Style
+from ..style import Style, Styles, style_defaults, style_defaults_schema
 from .server import ServerWidget
 from .settings_widgets import (
     ComboBoxSetting,
@@ -55,7 +66,7 @@ from .settings_widgets import (
     SpinBoxSetting,
     SwitchSetting,
 )
-from .style import StylePresets
+from .style import StylePresets, StyleSettingsEditor
 from .theme import add_header, green, grey, logo, prompt_max_line_count, red, yellow
 
 
@@ -829,6 +840,168 @@ class InterfaceSettings(SettingsTab):
         self._widgets["save_image_metadata"].enabled = fmt.extension == "png"
 
 
+class StyleDefaultsSettings(SettingsTab):
+    def __init__(self, server: Server):
+        super().__init__(_("Style Defaults"))
+        self._style = Style(util.user_data_dir / "defaults-style.json")
+        self._editor = StyleSettingsEditor(server, include_name=False, parent=self)
+        self._editor.value_changed.connect(self._save)
+        self._layout.addWidget(self._editor)
+
+    def read(self):
+        self._style = Style(util.user_data_dir / "defaults-style.json")
+        for name, value in style_defaults().items():
+            setattr(self._style, name, value)
+        self._editor.read(self._style)
+
+    def restore_defaults(self):
+        defaults.clear_section("style")
+        self.read()
+
+    def _save(self):
+        values = {name: getattr(self._style, name) for name in style_defaults_schema}
+        defaults.write_section("style", values, style_defaults_schema)
+
+
+class WorkspaceDefaultsPage(SettingsTab):
+    def __init__(self, title: str, workspace: Workspace):
+        super().__init__(title)
+        self.workspace = workspace
+
+    def read(self):
+        with self._write_guard:
+            values = load_workspace_defaults(self.workspace)
+            for name, widget in self._widgets.items():
+                widget.value = values[name]
+            self._read()
+
+    def write(self, *ignored):
+        if not self._write_guard:
+            values = {
+                name: widget.value for name, widget in self._widgets.items() if widget.enabled
+            }
+            save_workspace_defaults(self.workspace, values)
+            self._write()
+
+
+class WorkspaceDefaultsSettings(SettingsTab):
+    def __init__(self):
+        super().__init__(_("Workspace Defaults"))
+
+        tabs = QTabWidget(self)
+        self._layout.addWidget(tabs)
+        self._layout.addStretch()
+
+        self.generation = WorkspaceDefaultsPage(_("Generation"), Workspace.generation)
+        self.generation.add(
+            "style", ComboBoxSetting(generation_defaults_schema["style"], parent=self)
+        )
+        self.generation.add(
+            "batch_count", SpinBoxSetting(generation_defaults_schema["batch_count"], self, 1, 16)
+        )
+        self.generation.add(
+            "translation_enabled",
+            SwitchSetting(generation_defaults_schema["translation_enabled"], parent=self),
+        )
+        self.generation.add(
+            "inpaint_mode", ComboBoxSetting(generation_defaults_schema["inpaint_mode"], parent=self)
+        )
+        self.generation.add(
+            "inpaint_fill", ComboBoxSetting(generation_defaults_schema["inpaint_fill"], parent=self)
+        )
+        self.generation.add(
+            "inpaint_use_model",
+            SwitchSetting(generation_defaults_schema["inpaint_use_model"], parent=self),
+        )
+        self.generation.add(
+            "inpaint_use_prompt_focus",
+            SwitchSetting(generation_defaults_schema["inpaint_use_prompt_focus"], parent=self),
+        )
+        self.generation.add(
+            "inpaint_context",
+            ComboBoxSetting(generation_defaults_schema["inpaint_context"], parent=self),
+        )
+
+        self.upscaling = WorkspaceDefaultsPage(_("Upscaling"), Workspace.upscaling)
+        self.upscaling.add(
+            "upscale_model",
+            ComboBoxSetting(upscaling_defaults_schema["upscale_model"], parent=self),
+        )
+        self.upscaling.add(
+            "factor", SliderSetting(upscaling_defaults_schema["factor"], self, 1.0, 4.0, "{}x")
+        )
+        self.upscaling.add(
+            "use_diffusion",
+            SwitchSetting(upscaling_defaults_schema["use_diffusion"], parent=self),
+        )
+        self.upscaling.add(
+            "strength", SliderSetting(upscaling_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+        )
+        self.upscaling.add(
+            "unblur_strength",
+            SliderSetting(upscaling_defaults_schema["unblur_strength"], self, 0.0, 1.0, "{}"),
+        )
+        self.upscaling.add(
+            "use_prompt", SwitchSetting(upscaling_defaults_schema["use_prompt"], parent=self)
+        )
+
+        self.live = WorkspaceDefaultsPage(_("Live"), Workspace.live)
+        self.live.add(
+            "strength", SliderSetting(live_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+        )
+
+        self.animation = WorkspaceDefaultsPage(_("Animation"), Workspace.animation)
+        self.animation.add(
+            "sampling_quality",
+            ComboBoxSetting(animation_defaults_schema["sampling_quality"], parent=self),
+        )
+        self.animation.add(
+            "batch_mode",
+            SwitchSetting(animation_defaults_schema["batch_mode"], parent=self),
+        )
+
+        tabs.addTab(self.generation, _("Generation"))
+        tabs.addTab(self.upscaling, _("Upscaling"))
+        tabs.addTab(self.live, _("Live"))
+        tabs.addTab(self.animation, _("Animation"))
+
+        Styles.list().changed.connect(self._update_styles)
+        Styles.list().name_changed.connect(self._update_styles)
+        root.connection.models_changed.connect(self._update_upscalers)
+        self._update_styles()
+        self._update_upscalers()
+
+    def read(self):
+        self._update_styles()
+        self._update_upscalers()
+        self.generation.read()
+        self.upscaling.read()
+        self.live.read()
+        self.animation.read()
+
+    def restore_defaults(self):
+        defaults.clear_section("workspaces")
+        self.read()
+
+    def _update_styles(self):
+        styles = [(_("Current default style"), "")]
+        styles.extend((style.name, style.filename) for style in Styles.list())
+        widget: ComboBoxSetting = self.generation._widgets["style"]
+        widget.set_items(styles)
+
+    def _update_upscalers(self):
+        upscalers = []
+        if client := root.connection.client_if_connected:
+            upscalers = sorted(client.models.upscalers, key=str.lower)
+        for value in [settings.upscale_model, settings.upscale_model_small]:
+            if value and value not in upscalers:
+                upscalers.append(value)
+        items = [(_("Current global default"), "")]
+        items.extend((model.rsplit(".", 1)[0], model) for model in upscalers)
+        widget: ComboBoxSetting = self.upscaling._widgets["upscale_model"]
+        widget.set_items(items)
+
+
 class HistorySizeWidget(QWidget):
     value_changed = pyqtSignal()
 
@@ -1198,6 +1371,8 @@ class SettingsDialog(QDialog):
 
         self.connection = ConnectionSettings(server)
         self.styles = StylePresets(server)
+        self.style_defaults = StyleDefaultsSettings(server)
+        self.workspace_defaults = WorkspaceDefaultsSettings()
         self.diffusion = DiffusionSettings()
         self.interface = InterfaceSettings()
         self.performance = PerformanceSettings()
@@ -1214,6 +1389,8 @@ class SettingsDialog(QDialog):
 
         create_list_item(_("Connection"), self.connection)
         create_list_item(_("Styles"), self.styles)
+        create_list_item(_("Style Defaults"), self.style_defaults)
+        create_list_item(_("Workspace Defaults"), self.workspace_defaults)
         create_list_item(_("Diffusion"), self.diffusion)
         create_list_item(_("Interface"), self.interface)
         create_list_item(_("Performance"), self.performance)
@@ -1258,6 +1435,8 @@ class SettingsDialog(QDialog):
     def read(self):
         self.connection.read()
         self.styles.read()
+        self.style_defaults.read()
+        self.workspace_defaults.read()
         self.diffusion.read()
         self.interface.read()
         self.performance.read()
@@ -1266,6 +1445,8 @@ class SettingsDialog(QDialog):
     def restore_defaults(self):
         settings.restore()
         settings.save()
+        self.style_defaults.restore_defaults()
+        self.workspace_defaults.restore_defaults()
         self.read()
 
     def show(self, style: Style | None = None):

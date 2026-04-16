@@ -13,15 +13,16 @@ from PyQt5.QtWidgets import QMessageBox
 
 from . import eventloop
 from .backend.api import FillMode, InpaintMode
+from .defaults import defaults
 from .image import ImageCollection
 from .localization import translate as _
 from .model.control import ControlLayer, ControlLayerList
 from .model.custom_workflow import CustomWorkspace
 from .model.jobs import Job, JobKind, JobParams, JobQueue
-from .model.model import DocumentModel, InpaintContext
+from .model.model import DocumentModel, InpaintContext, SamplingQuality, Workspace
 from .model.properties import deserialize, serialize
 from .model.region import Region, RootRegion
-from .settings import settings
+from .settings import Setting, settings
 from .style import Style, Styles
 from .util import client_logger as log
 from .util import encode_json
@@ -29,72 +30,171 @@ from .util import encode_json
 # Version of the persistence format, increment when there are breaking changes
 version = 1
 
+generation_defaults_schema = {
+    "style": Setting(_("Style Preset"), "", _("Style selected for new documents.")),
+    "batch_count": Setting(_("Batch Count"), 1),
+    "translation_enabled": Setting(_("Prompt Translation"), True),
+    "inpaint_mode": Setting(_("Inpaint Mode"), InpaintMode.automatic),
+    "inpaint_fill": Setting(_("Inpaint Fill"), FillMode.neutral),
+    "inpaint_use_model": Setting(_("Use Inpaint Model"), True),
+    "inpaint_use_prompt_focus": Setting(_("Use Prompt Focus"), False),
+    "inpaint_context": Setting(_("Inpaint Context"), InpaintContext.automatic),
+}
 
-@dataclass
+upscaling_defaults_schema = {
+    "upscale_model": Setting(_("Upscale Model"), ""),
+    "factor": Setting(_("Scale"), 2.0),
+    "use_diffusion": Setting(_("Use Diffusion"), True),
+    "strength": Setting(_("Strength"), 0.3),
+    "unblur_strength": Setting(_("Image Guidance"), 0.5),
+    "use_prompt": Setting(_("Use Prompt"), False),
+}
+
+live_defaults_schema = {
+    "strength": Setting(_("Strength"), 0.3),
+}
+
+animation_defaults_schema = {
+    "sampling_quality": Setting(_("Sampling Quality"), SamplingQuality.fast),
+    "batch_mode": Setting(_("Batch Mode"), True),
+}
+
+workspace_defaults_schema = {
+    Workspace.generation: generation_defaults_schema,
+    Workspace.upscaling: upscaling_defaults_schema,
+    Workspace.live: live_defaults_schema,
+    Workspace.animation: animation_defaults_schema,
+}
+
+
+def load_workspace_defaults(workspace: Workspace):
+    return defaults.read_section(
+        ("workspaces", workspace.name), workspace_defaults_schema[workspace]
+    )
+
+
+def save_workspace_defaults(workspace: Workspace, values: dict[str, Any]):
+    defaults.write_section(
+        ("workspaces", workspace.name), values, workspace_defaults_schema[workspace]
+    )
+
+
 class RecentlyUsedSync:
     """Stores the most recently used parameters for various settings across all models.
     This is used to initialize new models with the last used parameters if they are
     created from scratch (not opening an existing .kra with stored settings).
     """
 
-    style: str = ""
-    batch_count: int = 1
-    translation_enabled: bool = True
-    inpaint_mode: str = "automatic"
-    inpaint_fill: str = "neutral"
-    inpaint_use_model: bool = True
-    inpaint_use_prompt_focus: bool = False
-    inpaint_context: str = "automatic"
-    upscale_model: str = ""
-
     @staticmethod
     def from_settings():
-        try:
-            return RecentlyUsedSync(**settings.document_defaults)
-        except Exception as e:
-            log.warning(f"Failed to load default document settings: {type(e)} {e}")
-            return RecentlyUsedSync()
+        recent = RecentlyUsedSync()
+        recent._migrate_legacy_settings()
+        return recent
 
     def track(self, model: DocumentModel):
         try:
             if _find_annotation(model.document, "ui.json") is None:
-                model.style = Styles.list().find(self.style) or Styles.list().default
-                model.batch_count = self.batch_count
-                model.translation_enabled = self.translation_enabled
-                model.inpaint.mode = InpaintMode[self.inpaint_mode]
-                model.inpaint.fill = FillMode[self.inpaint_fill]
-                model.inpaint.use_inpaint = self.inpaint_use_model
-                model.inpaint.use_prompt_focus = self.inpaint_use_prompt_focus
-                model.upscale.upscaler = self.upscale_model
-                if self.inpaint_context != InpaintContext.layer_bounds.name:
-                    model.inpaint.context = InpaintContext[self.inpaint_context]
+                generation = load_workspace_defaults(Workspace.generation)
+                upscaling = load_workspace_defaults(Workspace.upscaling)
+                live = load_workspace_defaults(Workspace.live)
+                animation = load_workspace_defaults(Workspace.animation)
+
+                model.style = Styles.list().find(generation["style"]) or Styles.list().default
+                model.batch_count = generation["batch_count"]
+                model.translation_enabled = generation["translation_enabled"]
+                model.inpaint.mode = generation["inpaint_mode"]
+                model.inpaint.fill = generation["inpaint_fill"]
+                model.inpaint.use_inpaint = generation["inpaint_use_model"]
+                model.inpaint.use_prompt_focus = generation["inpaint_use_prompt_focus"]
+                if generation["inpaint_context"] != InpaintContext.layer_bounds:
+                    model.inpaint.context = generation["inpaint_context"]
+
+                model.upscale.upscaler = upscaling["upscale_model"]
+                model.upscale.factor = upscaling["factor"]
+                model.upscale.use_diffusion = upscaling["use_diffusion"]
+                model.upscale.strength = upscaling["strength"]
+                model.upscale.unblur_strength = upscaling["unblur_strength"]
+                model.upscale.use_prompt = upscaling["use_prompt"]
+
+                model.live.strength = live["strength"]
+
+                model.animation.sampling_quality = animation["sampling_quality"]
+                model.animation.batch_mode = animation["batch_mode"]
         except Exception as e:
             log.warning(f"Failed to apply default settings to new document: {type(e)} {e}")
 
-        model.style_changed.connect(self._set("style"))
-        model.batch_count_changed.connect(self._set("batch_count"))
-        model.translation_enabled_changed.connect(self._set("translation_enabled"))
-        model.inpaint.mode_changed.connect(self._set("inpaint_mode"))
-        model.inpaint.fill_changed.connect(self._set("inpaint_fill"))
-        model.inpaint.use_inpaint_changed.connect(self._set("inpaint_use_model"))
-        model.inpaint.use_prompt_focus_changed.connect(self._set("inpaint_use_prompt_focus"))
-        model.inpaint.context_changed.connect(self._set("inpaint_context"))
-        model.upscale.upscaler_changed.connect(self._set("upscale_model"))
+        model.style_changed.connect(self._set(Workspace.generation, "style"))
+        model.batch_count_changed.connect(self._set(Workspace.generation, "batch_count"))
+        model.translation_enabled_changed.connect(
+            self._set(Workspace.generation, "translation_enabled")
+        )
+        model.inpaint.mode_changed.connect(self._set(Workspace.generation, "inpaint_mode"))
+        model.inpaint.fill_changed.connect(self._set(Workspace.generation, "inpaint_fill"))
+        model.inpaint.use_inpaint_changed.connect(
+            self._set(Workspace.generation, "inpaint_use_model")
+        )
+        model.inpaint.use_prompt_focus_changed.connect(
+            self._set(Workspace.generation, "inpaint_use_prompt_focus")
+        )
+        model.inpaint.context_changed.connect(self._set(Workspace.generation, "inpaint_context"))
 
-    def _set(self, key):
+        model.upscale.upscaler_changed.connect(self._set(Workspace.upscaling, "upscale_model"))
+        model.upscale.factor_changed.connect(self._set(Workspace.upscaling, "factor"))
+        model.upscale.use_diffusion_changed.connect(self._set(Workspace.upscaling, "use_diffusion"))
+        model.upscale.strength_changed.connect(self._set(Workspace.upscaling, "strength"))
+        model.upscale.unblur_strength_changed.connect(
+            self._set(Workspace.upscaling, "unblur_strength")
+        )
+        model.upscale.use_prompt_changed.connect(self._set(Workspace.upscaling, "use_prompt"))
+
+        model.live.strength_changed.connect(self._set(Workspace.live, "strength"))
+
+        model.animation.sampling_quality_changed.connect(
+            self._set(Workspace.animation, "sampling_quality")
+        )
+        model.animation.batch_mode_changed.connect(self._set(Workspace.animation, "batch_mode"))
+
+    def _set(self, workspace: Workspace, key: str):
         def setter(value):
             if isinstance(value, Style):
                 value = value.filename
             if isinstance(value, Enum):
                 value = value.name
-            setattr(self, key, value)
-            self._save()
+            values = load_workspace_defaults(workspace)
+            values[key] = value
+            save_workspace_defaults(workspace, values)
 
         return setter
 
-    def _save(self):
-        settings.document_defaults = asdict(self)
-        settings.save()
+    def _migrate_legacy_settings(self):
+        has_workspace_defaults = any(
+            defaults.read_section(("workspaces", workspace.name), schema)
+            != {key: setting.default for key, setting in schema.items()}
+            for workspace, schema in workspace_defaults_schema.items()
+        )
+        if has_workspace_defaults or not settings.document_defaults:
+            return
+
+        legacy = settings.document_defaults
+        save_workspace_defaults(
+            Workspace.generation,
+            {
+                "style": legacy.get("style", ""),
+                "batch_count": legacy.get("batch_count", 1),
+                "translation_enabled": legacy.get("translation_enabled", True),
+                "inpaint_mode": legacy.get("inpaint_mode", InpaintMode.automatic.name),
+                "inpaint_fill": legacy.get("inpaint_fill", FillMode.neutral.name),
+                "inpaint_use_model": legacy.get("inpaint_use_model", True),
+                "inpaint_use_prompt_focus": legacy.get("inpaint_use_prompt_focus", False),
+                "inpaint_context": legacy.get("inpaint_context", InpaintContext.automatic.name),
+            },
+        )
+        save_workspace_defaults(
+            Workspace.upscaling,
+            {
+                "upscale_model": legacy.get("upscale_model", ""),
+            },
+        )
 
 
 @dataclass

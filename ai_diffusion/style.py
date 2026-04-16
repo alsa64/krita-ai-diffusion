@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from .backend.api import CheckpointInput, LoraInput
 from .backend.resources import Arch
+from .defaults import defaults
 from .localization import translate as _
 from .settings import Setting, settings
 from .util import client_logger as log
@@ -237,6 +238,22 @@ class Style(QObject):
         return min_steps, max_steps
 
 
+style_defaults_schema = {
+    name: setting
+    for name, setting in StyleSettings.__dict__.items()
+    if isinstance(setting, Setting) and name not in {"name", "version"}
+}
+
+
+def style_defaults():
+    return defaults.read_section("style", style_defaults_schema)
+
+
+def apply_style_defaults(style: Style):
+    for name, value in style_defaults().items():
+        setattr(style, name, copy(value))
+
+
 def _map_sampler_preset(filepath: str | Path, name: str, steps: int, cfg: float):
     sampler_preset = SamplerPresets.instance().add_missing(name, steps, cfg)
     if sampler_preset is not None:
@@ -282,6 +299,7 @@ class Styles(QObject):
         filename = Path(filename).name
         path = find_unused_path(self.user_folder / filename)
         new_style = Style(path)
+        apply_style_defaults(new_style)
         new_style.name = _("New Style")
         if checkpoint:
             new_style.checkpoints = [checkpoint]
