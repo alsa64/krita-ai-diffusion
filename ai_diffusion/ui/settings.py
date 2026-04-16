@@ -41,6 +41,7 @@ from ..backend.client import Client, MissingResources, User
 from ..backend.cloud_client import CloudClient
 from ..backend.resources import Arch, ResourceId
 from ..backend.server import Server, ServerState
+from ..model.custom_workflow import CustomGenerationMode
 from ..defaults import defaults
 from ..localization import Localization
 from ..localization import translate as _
@@ -51,6 +52,7 @@ from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
 from ..persistence import (
     animation_defaults_schema,
+    custom_defaults_schema,
     document_defaults_schema,
     generation_defaults_schema,
     live_defaults_schema,
@@ -1052,26 +1054,46 @@ class WorkspaceDefaultsSettings(SettingsTab):
             SwitchSetting(animation_defaults_schema["batch_mode"], parent=self),
         )
 
+        self.custom = WorkspaceDefaultsPage(_("Custom"), Workspace.custom)
+        self.custom.add(
+            "workflow_id", ComboBoxSetting(custom_defaults_schema["workflow_id"], parent=self)
+        )
+        self.custom.add("mode", ComboBoxSetting(custom_defaults_schema["mode"], parent=self))
+        self.custom.add(
+            "params_ui_height",
+            SpinBoxSetting(custom_defaults_schema["params_ui_height"], self, 0, 2000, 4, " px"),
+        )
+        cast(ComboBoxSetting, self.custom._widgets["mode"]).set_items([
+            (_("Generate"), CustomGenerationMode.regular),
+            (_("Generate Live"), CustomGenerationMode.live),
+            (_("Generate Animation"), CustomGenerationMode.animation),
+        ])
+
         tabs.addTab(self.document, _("General"))
         tabs.addTab(self.generation, _("Generation"))
         tabs.addTab(self.upscaling, _("Upscaling"))
         tabs.addTab(self.live, _("Live"))
         tabs.addTab(self.animation, _("Animation"))
+        tabs.addTab(self.custom, _("Custom"))
 
         Styles.list().changed.connect(self._update_styles)
         Styles.list().name_changed.connect(self._update_styles)
         root.connection.models_changed.connect(self._update_upscalers)
+        root.workflows.loaded.connect(self._update_workflows)
         self._update_styles()
         self._update_upscalers()
+        self._update_workflows()
 
     def read(self):
         self._update_styles()
         self._update_upscalers()
+        self._update_workflows()
         self.document.read()
         self.generation.read()
         self.upscaling.read()
         self.live.read()
         self.animation.read()
+        self.custom.read()
 
     def restore_defaults(self):
         defaults.clear_section("document")
@@ -1083,6 +1105,12 @@ class WorkspaceDefaultsSettings(SettingsTab):
         styles.extend((style.name, style.filename) for style in Styles.list())
         widget: ComboBoxSetting = self.generation._widgets["style"]
         widget.set_items(styles)
+
+    def _update_workflows(self):
+        items = [(_("First available workflow"), "")]
+        items.extend((workflow.name, workflow.id) for workflow in root.workflows)
+        widget: ComboBoxSetting = self.custom._widgets["workflow_id"]
+        widget.set_items(items)
 
     def _update_upscalers(self):
         upscalers = []
