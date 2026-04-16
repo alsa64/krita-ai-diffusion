@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from ai_diffusion import eventloop
+from ai_diffusion.backend import comfy_client as comfy_client_module
 from ai_diffusion.backend import resources
 from ai_diffusion.backend.api import (
     CheckpointInput,
@@ -16,7 +17,7 @@ from ai_diffusion.backend.api import (
 )
 from ai_diffusion.backend.client import ClientEvent, ClientModels, resolve_arch
 from ai_diffusion.backend.cloud_client import CloudClient
-from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_url
+from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_args, websocket_url
 from ai_diffusion.backend.network import NetworkError
 from ai_diffusion.backend.resources import ControlMode, ResourceKind, UpscalerName, resource_id
 from ai_diffusion.backend.server import Server, ServerBackend, ServerState
@@ -205,6 +206,8 @@ async def test_comfy_client_uses_configured_timeouts(monkeypatch):
 
         async def get(self, url, timeout=None, bearer=None):
             self.calls.append(("get", url, timeout, bearer))
+            if "model_info" in url:
+                return {"item": {}, "_meta": {"total": 100}}
             return {}
 
         async def download(self, url, timeout=None):
@@ -215,17 +218,37 @@ async def test_comfy_client_uses_configured_timeouts(monkeypatch):
     client._requests = StubRequests()
     monkeypatch.setattr(settings, "comfy_get_timeout", 77)
     monkeypatch.setattr(settings, "comfy_result_image_timeout", 321)
+    monkeypatch.setattr(settings, "comfy_model_inspection_timeout", 5)
+    monkeypatch.setattr(comfy_client_module, "time", iter([0, 0, 10]).__next__)
 
     await client._get("system_stats")
     assert client._requests.calls[0] == ("get", "http://example.com/system_stats", 77, None)
 
+    updates = [status async for status in client.try_inspect("checkpoints")]
+    assert len(updates) == 1
+    assert client._requests.calls[1] == (
+        "get",
+        "http://example.com/api/etn/model_info/checkpoints?offset=0&limit=8",
+        77,
+        None,
+    )
+
     with pytest.raises(RuntimeError, match="download failed"):
         await client._transfer_result_image("abc")
-    assert client._requests.calls[1] == (
+    assert client._requests.calls[2] == (
         "download",
         "http://example.com/api/etn/image/abc",
         321,
     )
+
+
+def test_websocket_args_uses_configured_ping_timeout(monkeypatch):
+    monkeypatch.setattr(settings, "websocket_ping_timeout", 91)
+    assert websocket_args("token") == {
+        "max_size": 2**30,
+        "ping_timeout": 91,
+        "additional_headers": {"Authorization": "Bearer token"},
+    }
 
 
 @pytest.mark.asyncio

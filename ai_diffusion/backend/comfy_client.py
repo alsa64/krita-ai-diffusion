@@ -479,7 +479,7 @@ class ComfyClient(Client):
             return
         try:
             log.info(f"Inspecting models at {self.url}/api/etn/model_info/{folder_name}")
-            start, timeout = time(), 600
+            start, timeout = time(), settings.comfy_model_inspection_timeout
             offset, total = 0, 100
             while offset < total and (time() - start) < timeout:
                 r = await self._get(f"api/etn/model_info/{folder_name}?offset={offset}&limit=8")
@@ -690,7 +690,7 @@ def websocket_url(url_http: str):
 
 
 def websocket_args(auth_token: str):
-    args: dict[str, Any] = {"max_size": 2**30, "ping_timeout": 60}
+    args: dict[str, Any] = {"max_size": 2**30, "ping_timeout": settings.websocket_ping_timeout}
     if auth_token:
         args["additional_headers"] = {"Authorization": f"Bearer {auth_token}"}
     return args

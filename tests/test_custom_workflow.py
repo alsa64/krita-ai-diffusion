@@ -1,3 +1,4 @@
+import asyncio
 import json
 import zlib
 from collections.abc import Iterable
@@ -37,6 +38,7 @@ from ai_diffusion.model.custom_workflow import (
     workflow_parameters,
 )
 from ai_diffusion.model.jobs import Job, JobKind, JobParams, JobQueue
+from ai_diffusion.settings import settings
 from ai_diffusion.style import Style, Styles
 from ai_diffusion.util import PluginError
 
@@ -537,6 +539,32 @@ def test_job_info_output():
     assert job_anim.params.name == "Name3"
     assert job_anim.kind == JobKind.diffusion
     assert job_anim.params.is_layered is True
+
+
+@pytest.mark.asyncio
+async def test_custom_workspace_live_uses_configured_poll_rate(monkeypatch):
+    workflows = WorkflowCollection(create_mock_connection({"connection1": make_dummy_graph(42)}))
+    calls = 0
+
+    async def generate(_):
+        nonlocal calls
+        calls += 1
+        return None if calls == 1 else False
+
+    sleeps = []
+
+    async def fake_sleep(interval):
+        sleeps.append(interval)
+
+    workspace = CustomWorkspace(workflows, generate, JobQueue())
+    monkeypatch.setattr(settings, "live_poll_rate", 0.25)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    workspace._is_live = True
+    await workspace._continue_generating()
+
+    assert sleeps == [0.25]
+    assert workspace.is_live is False
 
 
 def img_id(image: Image):

@@ -121,6 +121,8 @@ def test_save():
     original.download_inactivity_timeout = 45
     original.comfy_get_timeout = 75
     original.comfy_result_image_timeout = 420
+    original.comfy_model_inspection_timeout = 654
+    original.websocket_ping_timeout = 91
     original.cloud_sign_in_timeout = 360
     original.cloud_auth_poll_interval = 3.5
     original.cloud_job_poll_interval = 0.8
@@ -159,6 +161,8 @@ def test_save():
         and result.download_inactivity_timeout == 45
         and result.comfy_get_timeout == 75
         and result.comfy_result_image_timeout == 420
+        and result.comfy_model_inspection_timeout == 654
+        and result.websocket_ping_timeout == 91
         and result.cloud_sign_in_timeout == 360
         and result.cloud_auth_poll_interval == 3.5
         and result.cloud_job_poll_interval == 0.8

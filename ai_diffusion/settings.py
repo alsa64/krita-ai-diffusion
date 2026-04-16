@@ -610,6 +610,20 @@ class Settings(QObject):
         _("Timeout in seconds for downloading generated result images from ComfyUI."),
     )
 
+    comfy_model_inspection_timeout: int
+    _comfy_model_inspection_timeout = Setting(
+        _("Comfy Model Inspection Timeout"),
+        600,
+        _("Maximum time in seconds to spend inspecting ComfyUI model lists during discovery."),
+    )
+
+    websocket_ping_timeout: int
+    _websocket_ping_timeout = Setting(
+        _("Websocket Ping Timeout"),
+        60,
+        _("Timeout in seconds before considering the ComfyUI websocket connection unresponsive."),
+    )
+
     cloud_sign_in_timeout: int
     _cloud_sign_in_timeout = Setting(
         _("Cloud Sign-In Timeout"),

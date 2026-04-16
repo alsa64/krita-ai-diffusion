@@ -34,6 +34,7 @@ from ..backend.comfy_workflow import ComfyNode, ComfyWorkflow
 from ..backend.workflow import sampling_from_style
 from ..image import Bounds, Image, Mask
 from ..localization import translate as _
+from ..settings import settings
 from ..style import Styles
 from ..ui import theme
 from ..util import PluginError, base_type_match, parse_enum, user_data_dir
@@ -416,8 +417,6 @@ class CustomWorkspace(QObject, ObservableProperties):
     validation_error_changed = pyqtSignal(str)
     modified = pyqtSignal(QObject, str)
 
-    _live_poll_rate = 0.1
-
     def __init__(self, workflows: WorkflowCollection, generator: ImageGenerator, jobs: JobQueue):
         super().__init__()
         self._workflows = workflows
@@ -690,6 +689,10 @@ class CustomWorkspace(QObject, ObservableProperties):
                 self.has_result = True
             eventloop.run(self._continue_generating())
 
+    @property
+    def live_poll_rate(self):
+        return settings.live_poll_rate
+
     async def _continue_generating(self):
         while self.is_live:
             new_input = await self._generator(self._last_input)
@@ -697,7 +700,7 @@ class CustomWorkspace(QObject, ObservableProperties):
                 self.is_live = False
                 return
             elif new_input is None:  # no changes in input data
-                await asyncio.sleep(self._live_poll_rate)
+                await asyncio.sleep(self.live_poll_rate)
             else:  # frame was scheduled
                 self._last_input = new_input
                 return
