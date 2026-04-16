@@ -25,12 +25,15 @@ from ai_diffusion.custom_workflow import CustomGenerationMode, WorkflowCollectio
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
 from ai_diffusion.model import (
+    AnimationTargetLayerDefault,
     LiveScheduler,
     Model,
+    QueueMode,
     TileOverlapMode,
     Workspace,
     live_recording_folder,
     live_recording_frame_path,
+    select_default_animation_target_layer_id,
 )
 from ai_diffusion.persistence import (
     RecentlyUsedSync,
@@ -329,10 +332,14 @@ def test_workspace_defaults_roundtrip(tmp_path):
             Workspace.generation,
             {
                 "strength": 0.6,
+                "region_only": True,
+                "edit_mode": True,
                 "batch_count": 3,
+                "fixed_seed": True,
                 "resolution_multiplier": 2.0,
                 "use_smart_resolution": False,
                 "smart_rotate": True,
+                "queue_mode": QueueMode.front.name,
                 "layer_count": 6,
                 "inpaint_mode": InpaintMode.custom.name,
             },
@@ -349,10 +356,14 @@ def test_workspace_defaults_roundtrip(tmp_path):
         upscale_values = load_workspace_defaults(Workspace.upscaling)
 
         assert values["strength"] == 0.6
+        assert values["region_only"] is True
+        assert values["edit_mode"] is True
         assert values["batch_count"] == 3
+        assert values["fixed_seed"] is True
         assert values["resolution_multiplier"] == 2.0
         assert values["use_smart_resolution"] is False
         assert values["smart_rotate"] is True
+        assert values["queue_mode"] is QueueMode.front
         assert values["layer_count"] == 6
         assert values["inpaint_mode"] is InpaintMode.custom
         assert values["translation_enabled"] is True
@@ -394,6 +405,28 @@ def test_live_workspace_defaults_roundtrip(tmp_path):
         assert values["strength"] == 0.6
         assert values["recording_format"] is ImageFileFormat.jpeg
         assert values["recording_folder_name_format"] == "{document_name}-takes"
+    finally:
+        defaults._path = original_path
+
+
+def test_animation_workspace_defaults_roundtrip(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.animation,
+            {
+                "sampling_quality": "quality",
+                "target_layer_default": AnimationTargetLayerDefault.first.name,
+                "batch_mode": False,
+            },
+        )
+
+        values = load_workspace_defaults(Workspace.animation)
+
+        assert values["sampling_quality"].name == "quality"
+        assert values["target_layer_default"] is AnimationTargetLayerDefault.first
+        assert values["batch_mode"] is False
     finally:
         defaults._path = original_path
 
@@ -473,10 +506,14 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
             "workspace": Workspace.live.name,
             "style": "preset.json",
             "strength": 0.4,
+            "region_only": True,
+            "edit_mode": True,
             "batch_count": 5,
+            "fixed_seed": True,
             "resolution_multiplier": 2.3,
             "use_smart_resolution": False,
             "smart_rotate": True,
+            "queue_mode": QueueMode.front.name,
             "layer_count": 8,
             "inpaint_mode": InpaintMode.custom.name,
             "tile_overlap_mode": TileOverlapMode.custom.name,
@@ -491,10 +528,14 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
         assert document["workspace"] is Workspace.live
         assert values["style"] == "preset.json"
         assert values["strength"] == 0.4
+        assert values["region_only"] is True
+        assert values["edit_mode"] is True
         assert values["batch_count"] == 5
+        assert values["fixed_seed"] is True
         assert values["resolution_multiplier"] == 2.3
         assert values["use_smart_resolution"] is False
         assert values["smart_rotate"] is True
+        assert values["queue_mode"] is QueueMode.front
         assert values["layer_count"] == 8
         assert values["inpaint_mode"] is InpaintMode.custom
         assert upscale_values["tile_overlap_mode"] is TileOverlapMode.custom
@@ -519,9 +560,13 @@ def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
             Workspace.generation,
             {
                 "strength": 0.55,
+                "region_only": True,
+                "edit_mode": True,
                 "resolution_multiplier": 2.4,
                 "use_smart_resolution": False,
                 "smart_rotate": True,
+                "fixed_seed": True,
+                "queue_mode": QueueMode.front.name,
                 "layer_count": 7,
             },
         )
@@ -532,9 +577,13 @@ def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
 
         assert model.workspace is Workspace.animation
         assert model.strength == 0.55
+        assert model.region_only is True
+        assert model.edit_mode is True
         assert model.resolution_multiplier == 2.4
         assert model.use_smart_resolution is False
         assert model.smart_rotate is True
+        assert model.fixed_seed is True
+        assert model.queue_mode is QueueMode.front
         assert model.layer_count == 7
     finally:
         defaults._path = original_path
@@ -550,21 +599,108 @@ def test_recently_used_sync_tracks_workspace_and_generation_defaults(tmp_path):
 
         model.workspace = Workspace.live
         model.strength = 0.65
+        model.region_only = True
+        model.edit_mode = True
         model.resolution_multiplier = 1.8
         model.use_smart_resolution = False
         model.smart_rotate = True
+        model.fixed_seed = True
+        model.queue_mode = QueueMode.front
         model.layer_count = 5
 
         assert load_document_defaults()["workspace"] is Workspace.live
 
         values = load_workspace_defaults(Workspace.generation)
         assert values["strength"] == 0.65
+        assert values["region_only"] is True
+        assert values["edit_mode"] is True
         assert values["resolution_multiplier"] == 1.8
         assert values["use_smart_resolution"] is False
         assert values["smart_rotate"] is True
+        assert values["fixed_seed"] is True
+        assert values["queue_mode"] is QueueMode.front
         assert values["layer_count"] == 5
     finally:
         defaults._path = original_path
+
+
+def test_recently_used_sync_applies_animation_target_layer_default(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.animation,
+            {"target_layer_default": AnimationTargetLayerDefault.first.name},
+        )
+
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        assert model.animation.target_layer_default is AnimationTargetLayerDefault.first
+    finally:
+        defaults._path = original_path
+
+
+def test_recently_used_sync_tracks_animation_target_layer_default(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        model.animation.target_layer_default = AnimationTargetLayerDefault.first
+
+        values = load_workspace_defaults(Workspace.animation)
+        assert values["target_layer_default"] is AnimationTargetLayerDefault.first
+    finally:
+        defaults._path = original_path
+
+
+def test_select_default_animation_target_layer_id_prefers_active_layer():
+    first = types.SimpleNamespace(
+        id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    )
+    active = types.SimpleNamespace(
+        id="active", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    )
+
+    target = select_default_animation_target_layer_id(
+        AnimationTargetLayerDefault.active, active, [first, active]
+    )
+
+    assert target == "active"
+
+
+def test_select_default_animation_target_layer_id_falls_back_to_first_image_layer():
+    first = types.SimpleNamespace(
+        id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    )
+    missing = types.SimpleNamespace(
+        id="missing", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    )
+
+    target = select_default_animation_target_layer_id(
+        AnimationTargetLayerDefault.active, missing, [first]
+    )
+
+    assert target == "first"
+
+
+def test_select_default_animation_target_layer_id_uses_mask_parent_for_active_default():
+    parent = types.SimpleNamespace(
+        id="parent", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    )
+    mask = types.SimpleNamespace(
+        id="mask", type=types.SimpleNamespace(is_mask=True), parent_layer=parent
+    )
+
+    target = select_default_animation_target_layer_id(
+        AnimationTargetLayerDefault.active, mask, [parent]
+    )
+
+    assert target == "parent"
 
 
 def test_recently_used_sync_applies_new_document_custom_defaults(tmp_path):
