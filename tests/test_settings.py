@@ -129,6 +129,8 @@ def test_save():
     original.control_layer_end = 0.8
     original.server_connect_retry_attempts = 7
     original.server_connect_retry_delay = 9
+    original.server_authorization = "Bearer test-token"
+    original.check_server_resources = False
     original.download_retry_attempts = 4
     original.download_retry_delay = 3
     original.download_inactivity_timeout = 45
@@ -175,6 +177,8 @@ def test_save():
         and result.control_layer_end == 0.8
         and result.server_connect_retry_attempts == 7
         and result.server_connect_retry_delay == 9
+        and result.server_authorization == "Bearer test-token"
+        and result.check_server_resources is False
         and result.download_retry_attempts == 4
         and result.download_retry_delay == 3
         and result.download_inactivity_timeout == 45
@@ -985,3 +989,8 @@ def test_sort_recent_styles(tmp_path):
     recent, remaining = sort_recent_styles(all_styles, ["delta.json", "beta.json"], 2)
     assert recent == [d, b]
     assert remaining == [a, c]
+
+
+def test_recent_styles_default_is_empty():
+    assert Settings._recent_styles.default == []
+    assert Settings().recent_styles == []
