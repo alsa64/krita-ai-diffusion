@@ -1369,6 +1369,14 @@ class AdvancedSettings(SettingsTab):
             SpinBoxSetting(S._comfy_result_image_timeout, self, 1, 1800, suffix=" s"),
         )
         self.add(
+            "comfy_model_inspection_timeout",
+            SpinBoxSetting(S._comfy_model_inspection_timeout, self, 1, 3600, suffix=" s"),
+        )
+        self.add(
+            "websocket_ping_timeout",
+            SpinBoxSetting(S._websocket_ping_timeout, self, 1, 600, suffix=" s"),
+        )
+        self.add(
             "cloud_sign_in_timeout",
             SpinBoxSetting(S._cloud_sign_in_timeout, self, 5, 1800, suffix=" s"),
         )
