@@ -130,7 +130,7 @@ class Root(QObject):
                     urls.append("127.0.0.1:8000")  # ComfyUI Desktop default port
                     retries = 1
                 else:
-                    retries = 5
+                    retries = max(0, settings.server_connect_retry_attempts)
                 for url, retry in itertools.product(urls, range(retries)):
                     client = ComfyClient(url)
                     await connection._connect(client)
@@ -143,7 +143,7 @@ class Root(QObject):
                         or settings.server_mode not in [ServerMode.undefined, ServerMode.external]
                     ):
                         break
-                    await asyncio.sleep(5 * (retry + 1))
+                    await asyncio.sleep(max(0, settings.server_connect_retry_delay) * (retry + 1))
                 if settings.server_mode is ServerMode.undefined:
                     if connection.state is ConnectionState.connected:
                         settings.server_mode = ServerMode.external

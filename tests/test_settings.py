@@ -109,6 +109,17 @@ def test_save():
     original.live_default_grace_period = 0.35
     original.live_max_wait_time = 4.5
     original.live_delay_threshold = 2.5
+    original.save_image_quality_png = 82
+    original.save_image_quality_png_small = 48
+    original.save_image_quality_webp = 77
+    original.save_image_quality_webp_lossless = 100
+    original.save_image_quality_jpeg = 88
+    original.server_connect_retry_attempts = 7
+    original.server_connect_retry_delay = 9
+    original.download_retry_attempts = 4
+    original.download_retry_delay = 3
+    original.download_inactivity_timeout = 45
+    original.flux_inpaint_cfg_scale = 27.5
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -130,7 +141,33 @@ def test_save():
         and result.live_default_grace_period == 0.35
         and result.live_max_wait_time == 4.5
         and result.live_delay_threshold == 2.5
+        and result.save_image_quality_png == 82
+        and result.save_image_quality_png_small == 48
+        and result.save_image_quality_webp == 77
+        and result.save_image_quality_webp_lossless == 100
+        and result.save_image_quality_jpeg == 88
+        and result.server_connect_retry_attempts == 7
+        and result.server_connect_retry_delay == 9
+        and result.download_retry_attempts == 4
+        and result.download_retry_delay == 3
+        and result.download_inactivity_timeout == 45
+        and result.flux_inpaint_cfg_scale == 27.5
     )
+
+
+def test_image_format_quality():
+    s = Settings()
+    s.save_image_quality_png = 81
+    s.save_image_quality_png_small = 52
+    s.save_image_quality_webp = 79
+    s.save_image_quality_webp_lossless = 100
+    s.save_image_quality_jpeg = 87
+
+    assert s.image_format_quality(ImageFileFormat.png) == 81
+    assert s.image_format_quality(ImageFileFormat.png_small) == 52
+    assert s.image_format_quality(ImageFileFormat.webp) == 79
+    assert s.image_format_quality(ImageFileFormat.webp_lossless) == 100
+    assert s.image_format_quality(ImageFileFormat.jpeg) == 87
 
 
 def test_performance_preset():

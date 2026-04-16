@@ -215,6 +215,20 @@ class Settings(QObject):
     check_server_resources: bool
     _check_server_resources = Setting("Refuse connection if nodes or models are missing", True)
 
+    server_connect_retry_attempts: int
+    _server_connect_retry_attempts = Setting(
+        _("Server Connection Retry Attempts"),
+        5,
+        _("How many times to retry connecting to an external ComfyUI server on startup."),
+    )
+
+    server_connect_retry_delay: int
+    _server_connect_retry_delay = Setting(
+        _("Server Connection Retry Delay"),
+        5,
+        _("Base delay in seconds between external server connection retries on startup."),
+    )
+
     selection_feather: int
     _selection_feather = Setting(
         _("Selection Feather"),
@@ -362,18 +376,39 @@ class Settings(QObject):
         _("File format for saved images from thumbnails."),
     )
 
+    save_image_quality_png: int
+    _save_image_quality_png = Setting(
+        _("Image Quality (PNG Fast)"),
+        85,
+        _("Encoding quality used when writing PNG (fast) images."),
+    )
+
+    save_image_quality_png_small: int
+    _save_image_quality_png_small = Setting(
+        _("Image Quality (PNG)"),
+        50,
+        _("Encoding quality used when writing PNG images."),
+    )
+
     save_image_quality_webp: int
     _save_image_quality_webp = Setting(
-        "Save Image Quality (WebP)",
+        _("Image Quality (WebP)"),
         80,
-        "Quality for WebP encoding (0-100)",
+        _("Encoding quality used when writing WebP images."),
+    )
+
+    save_image_quality_webp_lossless: int
+    _save_image_quality_webp_lossless = Setting(
+        _("Image Quality (WebP Lossless)"),
+        100,
+        _("Encoding quality used when writing WebP lossless images."),
     )
 
     save_image_quality_jpeg: int
     _save_image_quality_jpeg = Setting(
-        "Save Image Quality (JPEG)",
+        _("Image Quality (JPEG)"),
         85,
-        "Quality for JPEG encoding (0-100)",
+        _("Encoding quality used when writing JPEG images."),
     )
 
     save_image_file_name_format: str
@@ -540,6 +575,34 @@ class Settings(QObject):
         _("Conserve memory by processing output images in smaller tiles."),
     )
 
+    download_retry_attempts: int
+    _download_retry_attempts = Setting(
+        _("Download Retry Attempts"),
+        3,
+        _("How many times interrupted downloads should be retried before failing."),
+    )
+
+    download_retry_delay: int
+    _download_retry_delay = Setting(
+        _("Download Retry Delay"),
+        1,
+        _("Delay in seconds before retrying an interrupted download."),
+    )
+
+    download_inactivity_timeout: int
+    _download_inactivity_timeout = Setting(
+        _("Download Inactivity Timeout"),
+        30,
+        _("Abort a download if no progress is received for this many seconds."),
+    )
+
+    flux_inpaint_cfg_scale: float
+    _flux_inpaint_cfg_scale = Setting(
+        _("Flux Inpaint CFG Override"),
+        30.0,
+        _("Guidance strength applied to Flux fill-model inpaint jobs."),
+    )
+
     _performance_presets: ClassVar[dict[PerformancePreset, PerformancePresetSettings]] = {
         PerformancePreset.cpu: PerformancePresetSettings(
             batch_size=1,
@@ -648,6 +711,19 @@ class Settings(QObject):
         if preset not in [PerformancePreset.custom, PerformancePreset.auto]:
             for k, v in self._performance_presets[preset]._asdict().items():
                 self._values[k] = v
+
+    def image_format_quality(self, format: ImageFileFormat):
+        if format is ImageFileFormat.png:
+            return self.save_image_quality_png
+        if format is ImageFileFormat.png_small:
+            return self.save_image_quality_png_small
+        if format is ImageFileFormat.webp:
+            return self.save_image_quality_webp
+        if format is ImageFileFormat.webp_lossless:
+            return self.save_image_quality_webp_lossless
+        if format is ImageFileFormat.jpeg:
+            return self.save_image_quality_jpeg
+        return 85
 
     def __iter__(self):
         return iter(self._values.items())

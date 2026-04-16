@@ -12,6 +12,7 @@ from PyQt6.QtCore import QBuffer, QByteArray, QFile, QUrl
 from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest, QSslError
 
 from ..localization import translate as _
+from ..settings import settings
 from ..util import client_logger as log
 
 
@@ -359,7 +360,9 @@ async def _try_download(network: QNetworkAccessManager, url: str, path: Path):
             await asyncio.sleep(0.02)  # don't starve UI
             progress_future = asyncio.get_running_loop().create_future()
 
-        if progress_helper.seconds_since_last_update() > 30:
+        if progress_helper.seconds_since_last_update() > max(
+            1, settings.download_inactivity_timeout
+        ):
             reply.abort()
             raise NetworkError(
                 QNetworkReply.NetworkError.TimeoutError,
@@ -375,7 +378,7 @@ async def _try_download(network: QNetworkAccessManager, url: str, path: Path):
 
 
 async def download(network: QNetworkAccessManager, url: str, path: Path):
-    for retry in range(3, 0, -1):
+    for retry in range(max(1, settings.download_retry_attempts), 0, -1):
         try:
             async for progress in _try_download(network, url, path):
                 yield progress
@@ -392,7 +395,7 @@ async def download(network: QNetworkAccessManager, url: str, path: Path):
                 log.warning(f"Download interrupted: {e}")
                 if retry == 1:
                     raise
-                await asyncio.sleep(1)
+                await asyncio.sleep(max(0, settings.download_retry_delay))
             else:
                 raise NetworkError(e.code, _("Failed to download") + f" {url}: {e.message}", url)
         except Exception as e:

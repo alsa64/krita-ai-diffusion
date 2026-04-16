@@ -76,6 +76,7 @@ from .properties import ObservableProperties, Property
 from .region import Region, RegionLink, RootRegion, get_region_inpaint_mask, process_regions
 
 
+
 class QueueMode(Enum):
     back = 0
     front = 1
