@@ -28,7 +28,7 @@ from .model.model import (
 )
 from .model.properties import deserialize, serialize
 from .model.region import Region, RootRegion
-from .settings import Setting, settings
+from .settings import ImageFileFormat, Setting, settings
 from .style import Style, Styles
 from .util import client_logger as log
 from .util import encode_json
@@ -69,6 +69,12 @@ upscaling_defaults_schema = {
 
 live_defaults_schema = {
     "strength": Setting(_("Strength"), 0.3),
+    "recording_format": Setting(_("Recording Format"), ImageFileFormat.webp),
+    "recording_folder_name_format": Setting(
+        _("Recording Folder Name Template"),
+        "{document_name}.live-frames",
+        "Template for naming the folder used for recorded live frames. Available keys: {document_name}, {document_file}.",
+    ),
 }
 
 animation_defaults_schema = {
@@ -151,6 +157,8 @@ class RecentlyUsedSync:
                 model.upscale.use_prompt = upscaling["use_prompt"]
 
                 model.live.strength = live["strength"]
+                model.live.recording_format = live["recording_format"]
+                model.live.recording_folder_name_format = live["recording_folder_name_format"]
 
                 model.animation.sampling_quality = animation["sampling_quality"]
                 model.animation.batch_mode = animation["batch_mode"]
@@ -196,6 +204,10 @@ class RecentlyUsedSync:
         model.upscale.use_prompt_changed.connect(self._set(Workspace.upscaling, "use_prompt"))
 
         model.live.strength_changed.connect(self._set(Workspace.live, "strength"))
+        model.live.recording_format_changed.connect(self._set(Workspace.live, "recording_format"))
+        model.live.recording_folder_name_format_changed.connect(
+            self._set(Workspace.live, "recording_folder_name_format")
+        )
 
         model.animation.sampling_quality_changed.connect(
             self._set(Workspace.animation, "sampling_quality")

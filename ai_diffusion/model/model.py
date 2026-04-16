@@ -1336,11 +1336,6 @@ class UpscaleWorkspace(QObject, ObservableProperties):
 
 
 class LiveScheduler:
-    poll_rate = 0.1
-    default_grace_period = 0.25  # seconds to delay after most recent document edit
-    max_wait_time = 3.0  # maximum seconds to delay over total editing time
-    delay_threshold = 1.5  # use delay only if average generation time exceeds this value
-
     def __init__(self):
         self._last_input: WorkflowInput | None = None
         self._last_change = 0.0
@@ -1377,6 +1372,22 @@ class LiveScheduler:
         return sum(self._generation_times) / max(1, len(self._generation_times))
 
     @property
+    def poll_rate(self):
+        return settings.live_poll_rate
+
+    @property
+    def default_grace_period(self):
+        return settings.live_default_grace_period
+
+    @property
+    def max_wait_time(self):
+        return settings.live_max_wait_time
+
+    @property
+    def delay_threshold(self):
+        return settings.live_delay_threshold
+
+    @property
     def grace_period(self):
         if self.average_generation_time > self.delay_threshold:
             return self.default_grace_period
@@ -1387,11 +1398,15 @@ class LiveWorkspace(QObject, ObservableProperties):
     is_active = Property(False, setter="toggle")
     is_recording = Property(False, setter="toggle_record")
     strength = Property(0.3, persist=True)
+    recording_format = Property(ImageFileFormat.webp, persist=True)
+    recording_folder_name_format = Property("{document_name}.live-frames", persist=True)
     has_result = Property(False)
 
     is_active_changed = pyqtSignal(bool)
     is_recording_changed = pyqtSignal(bool)
     strength_changed = pyqtSignal(float)
+    recording_format_changed = pyqtSignal(ImageFileFormat)
+    recording_folder_name_format_changed = pyqtSignal(str)
     seed_changed = pyqtSignal(int)
     has_result_changed = pyqtSignal(bool)
     result_available = pyqtSignal(Image)
@@ -1405,6 +1420,7 @@ class LiveWorkspace(QObject, ObservableProperties):
         self._result_composition: Image | None = None
         self._result_params: JobParams | None = None
         self._keyframes_folder: Path | None = None
+        self._keyframe_format = ImageFileFormat.webp
         self._keyframe_start = 0
         self._keyframe_index = 0
         self._keyframes: list[Path] = []
@@ -1502,10 +1518,13 @@ class LiveWorkspace(QObject, ObservableProperties):
         doc_filename = self.model.document.filename
         if doc_filename:
             path = Path(doc_filename)
-            folder = path.parent / f"{path.with_suffix('.live-frames')}"
+            self._keyframe_format = self.recording_format
+            folder = live_recording_folder(path, self.recording_folder_name_format)
             folder.mkdir(exist_ok=True)
             self._keyframes_folder = folder
-            while (self._keyframes_folder / f"frame-{self._keyframe_index}.webp").exists():
+            while live_recording_frame_path(
+                self._keyframes_folder, self._keyframe_index, self._keyframe_format
+            ).exists():
                 self._keyframe_index += 1
             self._keyframe_start = self._keyframe_index
         else:
@@ -1514,7 +1533,9 @@ class LiveWorkspace(QObject, ObservableProperties):
 
     def _save_frame(self, image: Image, bounds: Bounds):
         assert self._keyframes_folder is not None
-        filename = self._keyframes_folder / f"frame-{self._keyframe_index}.webp"
+        filename = live_recording_frame_path(
+            self._keyframes_folder, self._keyframe_index, self._keyframe_format
+        )
         self._keyframe_index += 1
 
         extent = self.model.document.extent
@@ -1531,6 +1552,26 @@ class LiveWorkspace(QObject, ObservableProperties):
         prompt = self.model.regions.active_or_root.positive
         self.model.layers.active.name = f"[Rec] {start}-{end}: {prompt}"
         self._keyframes = []
+
+
+def live_recording_folder(document_path: Path, template: str):
+    default_name = f"{document_path.stem}.live-frames"
+    try:
+        folder_name = template.format(
+            document_name=document_path.stem,
+            document_file=document_path.name,
+        )
+    except Exception:
+        folder_name = default_name
+
+    folder_name = folder_name.strip().replace("/", "-").replace("\\", "-")
+    if folder_name == "":
+        folder_name = default_name
+    return document_path.parent / folder_name
+
+
+def live_recording_frame_path(folder: Path, index: int, format: ImageFileFormat):
+    return folder / f"frame-{index}.{format.extension}"
 
 
 class SamplingQuality(Enum):

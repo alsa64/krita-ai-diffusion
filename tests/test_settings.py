@@ -24,7 +24,14 @@ from ai_diffusion.connection import Connection
 from ai_diffusion.custom_workflow import WorkflowCollection
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
-from ai_diffusion.model import Model, TileOverlapMode, Workspace
+from ai_diffusion.model import (
+    LiveScheduler,
+    Model,
+    TileOverlapMode,
+    Workspace,
+    live_recording_folder,
+    live_recording_frame_path,
+)
 from ai_diffusion.persistence import (
     RecentlyUsedSync,
     load_document_defaults,
@@ -32,7 +39,14 @@ from ai_diffusion.persistence import (
     save_document_defaults,
     save_workspace_defaults,
 )
-from ai_diffusion.settings import PerformancePreset, ServerMode, Setting, Settings, settings
+from ai_diffusion.settings import (
+    ImageFileFormat,
+    PerformancePreset,
+    ServerMode,
+    Setting,
+    Settings,
+    settings,
+)
 from ai_diffusion.style import (
     SamplerPreset,
     SamplerPresets,
@@ -91,6 +105,10 @@ def test_save():
     original.upscale_highres_refine_strength = 0.55
     original.upscale_tile_overlap_auto_base = 24
     original.upscale_tile_overlap_auto_denoise = 80
+    original.live_poll_rate = 0.2
+    original.live_default_grace_period = 0.35
+    original.live_max_wait_time = 4.5
+    original.live_delay_threshold = 2.5
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -108,6 +126,10 @@ def test_save():
         and result.upscale_highres_refine_strength == 0.55
         and result.upscale_tile_overlap_auto_base == 24
         and result.upscale_tile_overlap_auto_denoise == 80
+        and result.live_poll_rate == 0.2
+        and result.live_default_grace_period == 0.35
+        and result.live_max_wait_time == 4.5
+        and result.live_delay_threshold == 2.5
     )
 
 
@@ -299,6 +321,72 @@ def test_document_defaults_roundtrip(tmp_path):
         assert values["workspace"] is Workspace.upscaling
     finally:
         defaults._path = original_path
+
+
+def test_live_workspace_defaults_roundtrip(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.live,
+            {
+                "strength": 0.6,
+                "recording_format": ImageFileFormat.jpeg.name,
+                "recording_folder_name_format": "{document_name}-takes",
+            },
+        )
+
+        values = load_workspace_defaults(Workspace.live)
+
+        assert values["strength"] == 0.6
+        assert values["recording_format"] is ImageFileFormat.jpeg
+        assert values["recording_folder_name_format"] == "{document_name}-takes"
+    finally:
+        defaults._path = original_path
+
+
+def test_live_recording_paths_use_settings():
+    document_path = Path("/tmp/demo.kra")
+
+    folder = live_recording_folder(document_path, "{document_name}-captures")
+    frame = live_recording_frame_path(folder, 7, ImageFileFormat.png_small)
+
+    assert folder == Path("/tmp/demo-captures")
+    assert frame == Path("/tmp/demo-captures/frame-7.png")
+
+
+def test_live_recording_folder_falls_back_for_invalid_template():
+    document_path = Path("/tmp/demo.kra")
+
+    folder = live_recording_folder(document_path, "{missing}")
+
+    assert folder == Path("/tmp/demo.live-frames")
+
+
+def test_live_scheduler_uses_settings():
+    values = {
+        "live_poll_rate": settings.live_poll_rate,
+        "live_default_grace_period": settings.live_default_grace_period,
+        "live_max_wait_time": settings.live_max_wait_time,
+        "live_delay_threshold": settings.live_delay_threshold,
+    }
+    try:
+        settings.live_poll_rate = 0.2
+        settings.live_default_grace_period = 0.4
+        settings.live_max_wait_time = 6.0
+        settings.live_delay_threshold = 2.0
+
+        scheduler = LiveScheduler()
+        scheduler._generation_times.extend([2.5, 3.5])
+
+        assert scheduler.poll_rate == 0.2
+        assert scheduler.default_grace_period == 0.4
+        assert scheduler.max_wait_time == 6.0
+        assert scheduler.delay_threshold == 2.0
+        assert scheduler.grace_period == 0.4
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
 
 
 def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
