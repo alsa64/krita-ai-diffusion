@@ -274,6 +274,36 @@ class Settings(QObject):
         _("Pick a new seed after copying the result to the canvas in Live mode"),
     )
 
+    live_poll_rate: float
+    _live_poll_rate = Setting(
+        _("Live Poll Rate"),
+        0.1,
+        _("How often Live mode checks for document changes while waiting to generate."),
+    )
+
+    live_default_grace_period: float
+    _live_default_grace_period = Setting(
+        _("Live Grace Period"),
+        0.25,
+        _(
+            "Delay after the most recent edit before Live mode starts a new generation when generation is slow."
+        ),
+    )
+
+    live_max_wait_time: float
+    _live_max_wait_time = Setting(
+        _("Live Max Wait Time"),
+        3.0,
+        _("Maximum delay before Live mode generates again while edits continue."),
+    )
+
+    live_delay_threshold: float
+    _live_delay_threshold = Setting(
+        _("Live Delay Threshold"),
+        1.5,
+        _("Only apply the Live grace period when average generation time exceeds this threshold."),
+    )
+
     prompt_translation: str
     _prompt_translation = Setting(
         _("Prompt Translation"),

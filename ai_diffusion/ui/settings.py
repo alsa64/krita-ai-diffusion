@@ -65,11 +65,13 @@ from ..style import Style, Styles, style_defaults, style_defaults_schema
 from .server import ServerWidget
 from .settings_widgets import (
     ComboBoxSetting,
+    DoubleSpinBoxSetting,
     FileListSetting,
     SettingsTab,
     SliderSetting,
     SpinBoxSetting,
     SwitchSetting,
+    TextSetting,
 )
 from .style import StylePresets, StyleSettingsEditor
 from .theme import add_header, green, grey, logo, prompt_max_line_count, red, yellow
@@ -1031,6 +1033,14 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self.live.add(
             "strength", SliderSetting(live_defaults_schema["strength"], self, 0.0, 1.0, "{}")
         )
+        self.live.add(
+            "recording_format",
+            ComboBoxSetting(live_defaults_schema["recording_format"], parent=self),
+        )
+        self.live.add(
+            "recording_folder_name_format",
+            TextSetting(live_defaults_schema["recording_folder_name_format"], parent=self),
+        )
 
         self.animation = WorkspaceDefaultsPage(_("Animation"), Workspace.animation)
         self.animation.add(
@@ -1186,6 +1196,30 @@ class PerformanceSettings(SettingsTab):
         self._multi_threading.value_changed.connect(self.write)
         self._layout.addWidget(self._multi_threading)
 
+        self._live_poll_rate = DoubleSpinBoxSetting(
+            Settings._live_poll_rate, self, 0.01, 5.0, 0.01, 2, " s"
+        )
+        self._live_poll_rate.value_changed.connect(self.write)
+        self._layout.addWidget(self._live_poll_rate)
+
+        self._live_default_grace_period = DoubleSpinBoxSetting(
+            Settings._live_default_grace_period, self, 0.0, 5.0, 0.01, 2, " s"
+        )
+        self._live_default_grace_period.value_changed.connect(self.write)
+        self._layout.addWidget(self._live_default_grace_period)
+
+        self._live_max_wait_time = DoubleSpinBoxSetting(
+            Settings._live_max_wait_time, self, 0.1, 10.0, 0.1, 2, " s"
+        )
+        self._live_max_wait_time.value_changed.connect(self.write)
+        self._layout.addWidget(self._live_max_wait_time)
+
+        self._live_delay_threshold = DoubleSpinBoxSetting(
+            Settings._live_delay_threshold, self, 0.0, 10.0, 0.1, 2, " s"
+        )
+        self._live_delay_threshold.value_changed.connect(self.write)
+        self._layout.addWidget(self._live_delay_threshold)
+
         self._layout.addStretch()
 
     def _change_performance_preset(self, index):
@@ -1222,6 +1256,10 @@ class PerformanceSettings(SettingsTab):
         self._max_pixel_count.value = settings.max_pixel_count
         self._tiled_vae.value = settings.tiled_vae
         self._dynamic_caching.value = settings.dynamic_caching
+        self._live_poll_rate.value = settings.live_poll_rate
+        self._live_default_grace_period.value = settings.live_default_grace_period
+        self._live_max_wait_time.value = settings.live_max_wait_time
+        self._live_delay_threshold.value = settings.live_delay_threshold
         self.update_client_info()
 
     def _write(self):
@@ -1236,6 +1274,10 @@ class PerformanceSettings(SettingsTab):
             self._performance_preset.currentIndex()
         ]
         settings.dynamic_caching = self._dynamic_caching.value
+        settings.live_poll_rate = self._live_poll_rate.value
+        settings.live_default_grace_period = self._live_default_grace_period.value
+        settings.live_max_wait_time = self._live_max_wait_time.value
+        settings.live_delay_threshold = self._live_delay_threshold.value
 
 
 class AboutSettings(SettingsTab):
