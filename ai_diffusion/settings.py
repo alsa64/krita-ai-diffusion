@@ -471,6 +471,55 @@ class Settings(QObject):
         ),
     )
 
+    preview_layer_name_format: str
+    _preview_layer_name_format = Setting(
+        _("Preview Layer Name Template"),
+        "[Preview] {prompt}",
+        "Template for preview layer names. Available keys: {prompt}.",
+    )
+
+    apply_layer_name_format: str
+    _apply_layer_name_format = Setting(
+        _("Apply Layer Name Template"),
+        "{prefix}{prompt} ({seed})",
+        "Template for newly created result layers. Available keys: {prefix}, {prompt}, {seed}.",
+    )
+
+    generated_layer_name_prefix: str
+    _generated_layer_name_prefix = Setting(
+        _("Generated Layer Prefix"),
+        "[Generated] ",
+        "Prefix inserted into the apply layer name template when applying a generated result.",
+    )
+
+    layered_batch_prefix_format: str
+    _layered_batch_prefix_format = Setting(
+        _("Layered Batch Prefix Template"),
+        "[Layer {layer_index}] ",
+        "Prefix inserted into the apply layer name template for layered batch results. Available keys: {layer_index}.",
+    )
+
+    animation_layer_name_format: str
+    _animation_layer_name_format = Setting(
+        _("Animation Layer Name Template"),
+        "[Animation] {prompt}",
+        "Template for the imported animation layer name. Available keys: {prompt}.",
+    )
+
+    animation_import_layer_name_format: str
+    _animation_import_layer_name_format = Setting(
+        _("Animation Batch Import Layer Name Template"),
+        "[Generated] {start}-{end}: {prompt}",
+        "Template for animation batch import layer names. Available keys: {start}, {end}, {prompt}.",
+    )
+
+    live_recording_layer_name_format: str
+    _live_recording_layer_name_format = Setting(
+        _("Live Recording Import Layer Name Template"),
+        "[Rec] {start}-{end}: {prompt}",
+        "Template for imported live recording layer names. Available keys: {start}, {end}, {prompt}.",
+    )
+
     confirm_discard_image: bool
     _confirm_discard_image = Setting("Ask for confirmation when discarding images", True)
 

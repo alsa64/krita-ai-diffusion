@@ -789,7 +789,7 @@ class DocumentModel(QObject, ObservableProperties):
         if job.kind is JobKind.animation:
             return  # don't show animation preview on canvas (it's slow and clumsy)
 
-        name = f"[{name_prefix}] {trim_text(job.params.name, 77)}"
+        name = preview_layer_name(job.params.name, name_prefix)
         image = job.results[index]
         bounds = Bounds(*job.params.bounds.offset, *image.extent)
         if self._layer and self._layer.was_removed:
@@ -827,7 +827,7 @@ class DocumentModel(QObject, ObservableProperties):
             if behavior is ApplyBehavior.replace:
                 self.layers.update_layer_image(target, image, bounds)
             else:
-                name = f"{prefix}{trim_text(params.name, 200)} ({params.seed})"
+                name = apply_layer_name(trim_text(params.name, 200), params.seed, prefix)
                 pos = target if behavior is ApplyBehavior.layer_active else None
                 self.layers.create(name, image, bounds, above=pos)
         else:  # apply to regions
@@ -853,7 +853,7 @@ class DocumentModel(QObject, ObservableProperties):
         behavior: ApplyRegionBehavior,
         prefix="",
     ):
-        name = f"{prefix}{job_region.prompt} ({params.seed})"
+        name = apply_layer_name(job_region.prompt, params.seed, prefix)
         region_layer = self.layers.find(QUuid(job_region.layer_id)) or self.layers.root
         region_layer = self._apply_target_layer(region_layer)
         # a previous apply from the same batch may have already created groups and re-linked
@@ -919,14 +919,14 @@ class DocumentModel(QObject, ObservableProperties):
             self.apply_animation(job)
         elif job.params.is_layered and len(job.results) > 1:
             for i, image in enumerate(job.results):
-                self.apply_result(image, job.params, prefix=f"[Layer {i + 1}] ")
+                self.apply_result(image, job.params, prefix=layered_batch_layer_prefix(i + 1))
         else:
             self.apply_result(
                 job.results[index],
                 job.params,
                 settings.apply_behavior,
                 settings.apply_region_behavior,
-                "[Generated] ",
+                generated_layer_prefix(),
             )
         if self._layer:
             self._layer.remove()
@@ -945,7 +945,7 @@ class DocumentModel(QObject, ObservableProperties):
             self.document.import_animation(frames, self.document.playback_time_range[0])
 
         async def _set_layer_name():
-            self.layers.active.name = f"[Animation] {trim_text(job.params.name, 200)}"
+            self.layers.active.name = animation_layer_name(job.params.name)
 
         eventloop.run(_set_layer_name())
 
@@ -1408,6 +1408,7 @@ class LiveWorkspace(QObject, ObservableProperties):
     strength = Property(0.3, persist=True)
     recording_format = Property(ImageFileFormat.webp, persist=True)
     recording_folder_name_format = Property("{document_name}.live-frames", persist=True)
+    recording_frame_name_format = Property("frame-{index}.{extension}", persist=True)
     has_result = Property(False)
 
     is_active_changed = pyqtSignal(bool)
@@ -1415,6 +1416,7 @@ class LiveWorkspace(QObject, ObservableProperties):
     strength_changed = pyqtSignal(float)
     recording_format_changed = pyqtSignal(ImageFileFormat)
     recording_folder_name_format_changed = pyqtSignal(str)
+    recording_frame_name_format_changed = pyqtSignal(str)
     seed_changed = pyqtSignal(int)
     has_result_changed = pyqtSignal(bool)
     result_available = pyqtSignal(Image)
@@ -1531,7 +1533,10 @@ class LiveWorkspace(QObject, ObservableProperties):
             folder.mkdir(exist_ok=True)
             self._keyframes_folder = folder
             while live_recording_frame_path(
-                self._keyframes_folder, self._keyframe_index, self._keyframe_format
+                self._keyframes_folder,
+                self._keyframe_index,
+                self._keyframe_format,
+                self.recording_frame_name_format,
             ).exists():
                 self._keyframe_index += 1
             self._keyframe_start = self._keyframe_index
@@ -1542,7 +1547,10 @@ class LiveWorkspace(QObject, ObservableProperties):
     def _save_frame(self, image: Image, bounds: Bounds):
         assert self._keyframes_folder is not None
         filename = live_recording_frame_path(
-            self._keyframes_folder, self._keyframe_index, self._keyframe_format
+            self._keyframes_folder,
+            self._keyframe_index,
+            self._keyframe_format,
+            self.recording_frame_name_format,
         )
         self._keyframe_index += 1
 
@@ -1558,28 +1566,113 @@ class LiveWorkspace(QObject, ObservableProperties):
         self.model.document.import_animation(self._keyframes, self._keyframe_start)
         start, end = self._keyframe_start, self._keyframe_start + len(self._keyframes)
         prompt = self.model.regions.active_or_root.positive
-        self.model.layers.active.name = f"[Rec] {start}-{end}: {prompt}"
+        self.model.layers.active.name = live_recording_import_layer_name(prompt, start, end)
         self._keyframes = []
+
+
+def _format_template(template: str, fallback: str, allow_empty=False, **values):
+    try:
+        result = template.format(**values)
+    except Exception:
+        result = fallback.format(**values)
+    if result.strip() == "" and not allow_empty:
+        result = fallback.format(**values)
+    return result
+
+
+def _sanitize_path_component(name: str, fallback: str):
+    name = name.strip().replace("/", "-").replace("\\", "-")
+    return name or fallback
+
+
+def preview_layer_name(prompt: str, name_prefix="Preview"):
+    prompt = trim_text(prompt, 77)
+    fallback = f"[{name_prefix}] {{prompt}}"
+    template = settings.preview_layer_name_format if name_prefix == "Preview" else fallback
+    return _format_template(template, fallback, prompt=prompt)
+
+
+def apply_layer_name(prompt: str, seed: int, prefix=""):
+    return _format_template(
+        settings.apply_layer_name_format,
+        "{prefix}{prompt} ({seed})",
+        prefix=prefix,
+        prompt=prompt,
+        seed=seed,
+    )
+
+
+def generated_layer_prefix():
+    return _format_template(
+        settings.generated_layer_name_prefix,
+        "[Generated] ",
+        allow_empty=True,
+    )
+
+
+def layered_batch_layer_prefix(layer_index: int):
+    return _format_template(
+        settings.layered_batch_prefix_format,
+        "[Layer {layer_index}] ",
+        allow_empty=True,
+        layer_index=layer_index,
+    )
+
+
+def animation_layer_name(prompt: str):
+    return _format_template(
+        settings.animation_layer_name_format,
+        "[Animation] {prompt}",
+        prompt=trim_text(prompt, 200),
+    )
+
+
+def animation_import_layer_name(prompt: str, start: int, end: int):
+    return _format_template(
+        settings.animation_import_layer_name_format,
+        "[Generated] {start}-{end}: {prompt}",
+        start=start,
+        end=end,
+        prompt=trim_text(prompt, 200),
+    )
+
+
+def live_recording_import_layer_name(prompt: str, start: int, end: int):
+    return _format_template(
+        settings.live_recording_layer_name_format,
+        "[Rec] {start}-{end}: {prompt}",
+        start=start,
+        end=end,
+        prompt=trim_text(prompt, 200),
+    )
 
 
 def live_recording_folder(document_path: Path, template: str):
     default_name = f"{document_path.stem}.live-frames"
-    try:
-        folder_name = template.format(
-            document_name=document_path.stem,
-            document_file=document_path.name,
-        )
-    except Exception:
-        folder_name = default_name
-
-    folder_name = folder_name.strip().replace("/", "-").replace("\\", "-")
-    if folder_name == "":
-        folder_name = default_name
+    folder_name = _format_template(
+        template,
+        "{document_name}.live-frames",
+        document_name=document_path.stem,
+        document_file=document_path.name,
+    )
+    folder_name = _sanitize_path_component(folder_name, default_name)
     return document_path.parent / folder_name
 
 
-def live_recording_frame_path(folder: Path, index: int, format: ImageFileFormat):
-    return folder / f"frame-{index}.{format.extension}"
+def live_recording_frame_path(
+    folder: Path,
+    index: int,
+    format: ImageFileFormat,
+    template="frame-{index}.{extension}",
+):
+    default_name = f"frame-{index}.{format.extension}"
+    filename = _format_template(
+        template,
+        "frame-{index}.{extension}",
+        index=index,
+        extension=format.extension,
+    )
+    return folder / _sanitize_path_component(filename, default_name)
 
 
 class SamplingQuality(Enum):
@@ -1592,11 +1685,15 @@ class AnimationWorkspace(QObject, ObservableProperties):
     target_layer = Property(QUuid(), persist=True)
     target_layer_default = Property(AnimationTargetLayerDefault.active, persist=True)
     batch_mode = Property(True, persist=True)
+    batch_folder_name_format = Property("{document_name}.animation", persist=True)
+    batch_frame_name_format = Property("frame-{frame}.{extension}", persist=True)
 
     sampling_quality_changed = pyqtSignal(SamplingQuality)
     target_layer_changed = pyqtSignal(QUuid)
     target_layer_default_changed = pyqtSignal(AnimationTargetLayerDefault)
     batch_mode_changed = pyqtSignal(bool)
+    batch_folder_name_format_changed = pyqtSignal(str)
+    batch_frame_name_format_changed = pyqtSignal(str)
     target_image_changed = pyqtSignal(Image)
     modified = pyqtSignal(QObject, str)
 
@@ -1671,7 +1768,7 @@ class AnimationWorkspace(QObject, ObservableProperties):
 
         if doc.filename:
             path = Path(doc.filename)
-            folder = path.parent / f"{path.with_suffix('.animation')}"
+            folder = animation_batch_output_folder(path, self.batch_folder_name_format)
             folder.mkdir(exist_ok=True)
             self._keyframes_folder = folder
         else:
@@ -1710,7 +1807,11 @@ class AnimationWorkspace(QObject, ObservableProperties):
             keyframes = self._keyframes.setdefault(job.params.animation_id, [])
             if len(job.results) > 0:
                 image = job.results[0]
-                filename = self._keyframes_folder / f"frame-{frame}.png"
+                filename = animation_batch_frame_path(
+                    self._keyframes_folder,
+                    frame,
+                    self.batch_frame_name_format,
+                )
                 image.save(filename)
                 keyframes.append(filename)
                 self.target_image_changed.emit(image)
@@ -1738,7 +1839,9 @@ class AnimationWorkspace(QObject, ObservableProperties):
         keyframes = self._keyframes.pop(job.params.animation_id)
         _, start, end = job.params.frame
         doc.import_animation(keyframes, start)
-        eventloop.run(self._update_layer_name(f"[Generated] {start}-{end}: {job.params.name}"))
+        eventloop.run(
+            self._update_layer_name(animation_import_layer_name(job.params.name, start, end))
+        )
 
     async def _update_layer_name(self, name: str):
         doc = self._model.document
@@ -1766,6 +1869,28 @@ def select_default_animation_target_layer_id(
                 if layer.id == target.id:
                     return layer.id
     return image_layers[0].id
+
+
+def animation_batch_output_folder(document_path: Path, template: str):
+    default_name = f"{document_path.stem}.animation"
+    folder_name = _format_template(
+        template,
+        "{document_name}.animation",
+        document_name=document_path.stem,
+        document_file=document_path.name,
+    )
+    return document_path.parent / _sanitize_path_component(folder_name, default_name)
+
+
+def animation_batch_frame_path(folder: Path, frame: int, template: str, extension="png"):
+    default_name = f"frame-{frame}.{extension}"
+    filename = _format_template(
+        template,
+        "frame-{frame}.{extension}",
+        frame=frame,
+        extension=extension,
+    )
+    return folder / _sanitize_path_component(filename, default_name)
 
 
 def get_selection_modifiers(

@@ -34,8 +34,17 @@ from ai_diffusion.model import (
     QueueMode,
     TileOverlapMode,
     Workspace,
+    animation_batch_frame_path,
+    animation_batch_output_folder,
+    animation_import_layer_name,
+    animation_layer_name,
+    apply_layer_name,
+    generated_layer_prefix,
+    layered_batch_layer_prefix,
     live_recording_folder,
     live_recording_frame_path,
+    live_recording_import_layer_name,
+    preview_layer_name,
     select_default_animation_target_layer_id,
 )
 from ai_diffusion.persistence import (
@@ -143,6 +152,13 @@ def test_save():
     original.cloud_job_poll_interval = 0.8
     original.auto_update_check_timeout = 12
     original.flux_inpaint_cfg_scale = 27.5
+    original.preview_layer_name_format = "Preview::{prompt}"
+    original.apply_layer_name_format = "{prefix}{seed}:{prompt}"
+    original.generated_layer_name_prefix = "Gen::"
+    original.layered_batch_prefix_format = "L{layer_index}::"
+    original.animation_layer_name_format = "Anim::{prompt}"
+    original.animation_import_layer_name_format = "Batch::{start}-{end}:{prompt}"
+    original.live_recording_layer_name_format = "Rec::{start}-{end}:{prompt}"
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -191,6 +207,13 @@ def test_save():
         and result.cloud_job_poll_interval == 0.8
         and result.auto_update_check_timeout == 12
         and result.flux_inpaint_cfg_scale == 27.5
+        and result.preview_layer_name_format == "Preview::{prompt}"
+        and result.apply_layer_name_format == "{prefix}{seed}:{prompt}"
+        and result.generated_layer_name_prefix == "Gen::"
+        and result.layered_batch_prefix_format == "L{layer_index}::"
+        and result.animation_layer_name_format == "Anim::{prompt}"
+        and result.animation_import_layer_name_format == "Batch::{start}-{end}:{prompt}"
+        and result.live_recording_layer_name_format == "Rec::{start}-{end}:{prompt}"
     )
 
 
@@ -417,6 +440,7 @@ def test_live_workspace_defaults_roundtrip(tmp_path):
                 "strength": 0.6,
                 "recording_format": ImageFileFormat.jpeg.name,
                 "recording_folder_name_format": "{document_name}-takes",
+                "recording_frame_name_format": "take-{index:03}.{extension}",
             },
         )
 
@@ -425,6 +449,7 @@ def test_live_workspace_defaults_roundtrip(tmp_path):
         assert values["strength"] == 0.6
         assert values["recording_format"] is ImageFileFormat.jpeg
         assert values["recording_folder_name_format"] == "{document_name}-takes"
+        assert values["recording_frame_name_format"] == "take-{index:03}.{extension}"
     finally:
         defaults._path = original_path
 
@@ -439,6 +464,8 @@ def test_animation_workspace_defaults_roundtrip(tmp_path):
                 "sampling_quality": "quality",
                 "target_layer_default": AnimationTargetLayerDefault.first.name,
                 "batch_mode": False,
+                "batch_folder_name_format": "{document_name}-shots",
+                "batch_frame_name_format": "shot-{frame:04}.{extension}",
             },
         )
 
@@ -447,6 +474,8 @@ def test_animation_workspace_defaults_roundtrip(tmp_path):
         assert values["sampling_quality"].name == "quality"
         assert values["target_layer_default"] is AnimationTargetLayerDefault.first
         assert values["batch_mode"] is False
+        assert values["batch_folder_name_format"] == "{document_name}-shots"
+        assert values["batch_frame_name_format"] == "shot-{frame:04}.{extension}"
     finally:
         defaults._path = original_path
 
@@ -477,10 +506,12 @@ def test_live_recording_paths_use_settings():
     document_path = Path("/tmp/demo.kra")
 
     folder = live_recording_folder(document_path, "{document_name}-captures")
-    frame = live_recording_frame_path(folder, 7, ImageFileFormat.png_small)
+    frame = live_recording_frame_path(
+        folder, 7, ImageFileFormat.png_small, "take-{index:03}.{extension}"
+    )
 
     assert folder == Path("/tmp/demo-captures")
-    assert frame == Path("/tmp/demo-captures/frame-7.png")
+    assert frame == Path("/tmp/demo-captures/take-007.png")
 
 
 def test_live_recording_folder_falls_back_for_invalid_template():
@@ -489,6 +520,56 @@ def test_live_recording_folder_falls_back_for_invalid_template():
     folder = live_recording_folder(document_path, "{missing}")
 
     assert folder == Path("/tmp/demo.live-frames")
+
+
+def test_animation_batch_paths_use_templates():
+    document_path = Path("/tmp/demo.kra")
+
+    folder = animation_batch_output_folder(document_path, "{document_name}-batch")
+    frame = animation_batch_frame_path(folder, 12, "shot-{frame:04}.{extension}")
+
+    assert folder == Path("/tmp/demo-batch")
+    assert frame == Path("/tmp/demo-batch/shot-0012.png")
+
+
+def test_animation_batch_paths_fall_back_for_invalid_templates():
+    document_path = Path("/tmp/demo.kra")
+    folder = animation_batch_output_folder(document_path, "{missing}")
+    frame = animation_batch_frame_path(folder, 5, "")
+
+    assert folder == Path("/tmp/demo.animation")
+    assert frame == Path("/tmp/demo.animation/frame-5.png")
+
+
+def test_layer_name_templates_use_settings():
+    values = {
+        "preview_layer_name_format": settings.preview_layer_name_format,
+        "apply_layer_name_format": settings.apply_layer_name_format,
+        "generated_layer_name_prefix": settings.generated_layer_name_prefix,
+        "layered_batch_prefix_format": settings.layered_batch_prefix_format,
+        "animation_layer_name_format": settings.animation_layer_name_format,
+        "animation_import_layer_name_format": settings.animation_import_layer_name_format,
+        "live_recording_layer_name_format": settings.live_recording_layer_name_format,
+    }
+    try:
+        settings.preview_layer_name_format = "Preview::{prompt}"
+        settings.apply_layer_name_format = "{prefix}{seed}:{prompt}"
+        settings.generated_layer_name_prefix = "Gen::"
+        settings.layered_batch_prefix_format = "L{layer_index}::"
+        settings.animation_layer_name_format = "Anim::{prompt}"
+        settings.animation_import_layer_name_format = "Batch::{start}-{end}:{prompt}"
+        settings.live_recording_layer_name_format = "Rec::{start}-{end}:{prompt}"
+
+        assert preview_layer_name("demo") == "Preview::demo"
+        assert apply_layer_name("prompt", 42, "Gen::") == "Gen::42:prompt"
+        assert generated_layer_prefix() == "Gen::"
+        assert layered_batch_layer_prefix(3) == "L3::"
+        assert animation_layer_name("move") == "Anim::move"
+        assert animation_import_layer_name("move", 1, 8) == "Batch::1-8:move"
+        assert live_recording_import_layer_name("move", 4, 7) == "Rec::4-7:move"
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
 
 
 def test_live_scheduler_uses_settings():
