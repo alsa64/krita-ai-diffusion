@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from .localization import translate as _
 from .platform_tools import is_macos, is_windows
+from .resources import ControlMode
 from .util import client_logger as log
 from .util import encode_json, read_json_with_comments, user_data_dir
 
@@ -330,6 +331,48 @@ class Settings(QObject):
         _("Save Image Metadata"),
         False,
         _("When saving generated images from thumbnails, include metadata in the PNG"),
+    )
+
+    control_layer_mode: ControlMode
+    _control_layer_mode = Setting(
+        _("Default Control Layer Mode"),
+        ControlMode.scribble,
+        _("Initial mode used for new control layers before you change it."),
+    )
+
+    control_layer_preset_value: int
+    _control_layer_preset_value = Setting(
+        _("Default Control Layer Preset"),
+        2,
+        _("Preset strength baseline used for new control layers when custom values are disabled."),
+    )
+
+    control_layer_use_custom_strength: bool
+    _control_layer_use_custom_strength = Setting(
+        _("Default Control Layer Uses Custom Values"),
+        False,
+        _("Start new control layers with custom strength and range instead of the preset slider."),
+    )
+
+    control_layer_strength: float
+    _control_layer_strength = Setting(
+        _("Default Control Layer Strength"),
+        1.0,
+        _("Strength used for new control layers when custom values are enabled."),
+    )
+
+    control_layer_start: float
+    _control_layer_start = Setting(
+        _("Default Control Layer Start"),
+        0.0,
+        _("Start of the control guidance range used for new control layers with custom values."),
+    )
+
+    control_layer_end: float
+    _control_layer_end = Setting(
+        _("Default Control Layer End"),
+        1.0,
+        _("End of the control guidance range used for new control layers with custom values."),
     )
 
     upscale_model: str

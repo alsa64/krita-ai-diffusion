@@ -39,7 +39,7 @@ from .. import __version__, eventloop, util
 from ..backend import resources
 from ..backend.client import Client, MissingResources, User
 from ..backend.cloud_client import CloudClient
-from ..backend.resources import Arch, ResourceId
+from ..backend.resources import Arch, ControlMode, ResourceId
 from ..backend.server import Server, ServerState
 from ..model.custom_workflow import CustomGenerationMode
 from ..defaults import defaults
@@ -62,6 +62,7 @@ from ..persistence import (
     save_workspace_defaults,
     upscaling_defaults_schema,
 )
+
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
 from ..style import Style, Styles, style_defaults, style_defaults_schema
 from .server import ServerWidget
@@ -710,6 +711,27 @@ class DiffusionSettings(SettingsTab):
             "color_match_edit",
             SwitchSetting(S._color_match_edit, parent=self),
         )
+        self.add("control_layer_mode", ComboBoxSetting(S._control_layer_mode, parent=self))
+        self.add(
+            "control_layer_preset_value",
+            SliderSetting(S._control_layer_preset_value, self, 0, 4, "{}"),
+        )
+        self.add(
+            "control_layer_use_custom_strength",
+            SwitchSetting(S._control_layer_use_custom_strength, parent=self),
+        )
+        self.add(
+            "control_layer_strength",
+            SliderSetting(S._control_layer_strength, self, 0.0, 1.5, "{}"),
+        )
+        self.add(
+            "control_layer_start",
+            SliderSetting(S._control_layer_start, self, 0.0, 1.0, "{}"),
+        )
+        self.add(
+            "control_layer_end",
+            SliderSetting(S._control_layer_end, self, 0.0, 1.0, "{}"),
+        )
         self.add("upscale_model", ComboBoxSetting(S._upscale_model, parent=self))
         self.add("upscale_model_small", ComboBoxSetting(S._upscale_model_small, parent=self))
         self.add(
@@ -728,8 +750,15 @@ class DiffusionSettings(SettingsTab):
 
         nsfw_settings = [(_("Disabled"), 0.0), (_("Basic"), 0.65), (_("Strict"), 0.8)]
         self._widgets["nsfw_filter"].set_items(nsfw_settings)
+        self._widgets["control_layer_mode"].set_items([
+            (mode.text, mode) for mode in ControlMode if not mode.is_internal
+        ])
+        self._widgets["control_layer_use_custom_strength"].value_changed.connect(
+            self._update_control_layer_default_widgets
+        )
         root.connection.models_changed.connect(self.update_upscalers)
         self.update_upscalers()
+        self._update_control_layer_default_widgets()
         DiffusionSettings._warning_shown = self._warning_shown or settings.nsfw_filter > 0
 
         self._layout.addStretch()
@@ -750,7 +779,15 @@ class DiffusionSettings(SettingsTab):
             widget.set_items(items)
             widget.value = getattr(settings, name)
 
+    def _read(self):
+        self._update_control_layer_default_widgets()
+
     def _write(self):
+        self._update_control_layer_default_widgets()
+        if self._widgets["control_layer_start"].value > self._widgets["control_layer_end"].value:
+            self._widgets["control_layer_end"].value = self._widgets["control_layer_start"].value
+            settings.control_layer_end = self._widgets["control_layer_end"].value
+
         if self._widgets["nsfw_filter"].value > 0 and not self._warning_shown:
             DiffusionSettings._warning_shown = True
             QMessageBox.warning(
@@ -760,6 +797,12 @@ class DiffusionSettings(SettingsTab):
                     "The NSFW filter is a basic tool to exclude explicit content from generated images. It is NOT a guarantee and may not catch all inappropriate content. Please use responsibly and always review the generated images."
                 ),
             )
+
+    def _update_control_layer_default_widgets(self):
+        use_custom = self._widgets["control_layer_use_custom_strength"].value
+        self._widgets["control_layer_strength"].enabled = use_custom
+        self._widgets["control_layer_start"].enabled = use_custom
+        self._widgets["control_layer_end"].enabled = use_custom
 
 
 class InterfaceSettings(SettingsTab):

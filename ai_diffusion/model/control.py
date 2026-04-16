@@ -13,6 +13,7 @@ from ..backend.resources import Arch, ControlMode, ResourceKind, resource_id
 from ..image import Bounds, Extent, Image
 from ..layer import Layer, LayerType
 from ..localization import translate as _
+from ..settings import settings
 from ..util import PluginError
 from ..util import client_logger as log
 from . import jobs, model
@@ -22,6 +23,7 @@ from .properties import ObservableProperties, Property
 class ControlLayer(QObject, ObservableProperties):
     max_preset_value = 4
     strength_multiplier = 50
+    max_strength = 75
     clip_vision_extent = Extent(224, 224)
 
     mode = Property(ControlMode.reference, persist=True, setter="set_mode")
@@ -60,6 +62,17 @@ class ControlLayer(QObject, ObservableProperties):
         self._model = model
         self._index = index
         self._generate_job: jobs.Job | None = None
+        self._preset_value = max(0, min(settings.control_layer_preset_value, self.max_preset_value))
+        self._strength = max(
+            0,
+            min(
+                int(round(settings.control_layer_strength * self.strength_multiplier)),
+                self.max_strength,
+            ),
+        )
+        self._start = max(0.0, min(settings.control_layer_start, 1.0))
+        self._end = max(self._start, min(settings.control_layer_end, 1.0))
+        self._use_custom_strength = settings.control_layer_use_custom_strength
         self.layer_id = layer_id
         self.mode = mode
         self._update_is_supported()
@@ -222,12 +235,12 @@ class ControlLayerList(QObject):
 
     _model: model.DocumentModel
     _layers: list[ControlLayer]
-    _last_mode = ControlMode.scribble
 
     def __init__(self, model: model.DocumentModel):
         super().__init__()
         self._model = model
         self._layers = []
+        self._last_mode = self._default_mode()
         self._model.layers.removed.connect(self._remove_layer)
 
     def add(self):
@@ -263,6 +276,13 @@ class ControlLayerList(QObject):
 
     def _update_last_mode(self, mode: ControlMode):
         self._last_mode = mode
+        if not mode.is_internal and settings.control_layer_mode is not mode:
+            settings.control_layer_mode = mode
+            settings.save()
+
+    def _default_mode(self):
+        mode = settings.control_layer_mode
+        return mode if not mode.is_internal else ControlMode.scribble
 
     def _remove_layer(self, layer: Layer):
         if control := next((c for c in self._layers if c.layer_id == layer.id), None):

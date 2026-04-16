@@ -146,7 +146,7 @@ class ControlWidget(QWidget):
 
         self.strength_slider = QSlider(self.extended_widget)
         self.strength_slider.setOrientation(Qt.Orientation.Horizontal)
-        self.strength_slider.setRange(0, 75)
+        self.strength_slider.setRange(0, ControlLayer.max_strength)
         self.strength_slider.setValue(control.strength)
         self.strength_slider.setSingleStep(1)
         self.strength_slider.setPageStep(10)
