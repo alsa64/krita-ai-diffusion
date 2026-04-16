@@ -4,6 +4,8 @@ import types
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from PyQt5.QtCore import QObject, QUuid, pyqtSignal
+
 krita = types.ModuleType("krita")
 
 
@@ -24,6 +26,7 @@ from ai_diffusion.connection import Connection
 from ai_diffusion.custom_workflow import CustomGenerationMode, WorkflowCollection
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
+from ai_diffusion.layer import LayerType
 from ai_diffusion.model import (
     AnimationTargetLayerDefault,
     LiveScheduler,
@@ -42,6 +45,7 @@ from ai_diffusion.persistence import (
     save_document_defaults,
     save_workspace_defaults,
 )
+from ai_diffusion.resources import Arch, ControlMode
 from ai_diffusion.settings import (
     ImageFileFormat,
     PerformancePreset,
@@ -117,6 +121,12 @@ def test_save():
     original.save_image_quality_webp = 77
     original.save_image_quality_webp_lossless = 100
     original.save_image_quality_jpeg = 88
+    original.control_layer_mode = ControlMode.depth
+    original.control_layer_preset_value = 4
+    original.control_layer_use_custom_strength = True
+    original.control_layer_strength = 1.2
+    original.control_layer_start = 0.2
+    original.control_layer_end = 0.8
     original.server_connect_retry_attempts = 7
     original.server_connect_retry_delay = 9
     original.download_retry_attempts = 4
@@ -157,6 +167,12 @@ def test_save():
         and result.save_image_quality_webp == 77
         and result.save_image_quality_webp_lossless == 100
         and result.save_image_quality_jpeg == 88
+        and result.control_layer_mode is ControlMode.depth
+        and result.control_layer_preset_value == 4
+        and result.control_layer_use_custom_strength
+        and result.control_layer_strength == 1.2
+        and result.control_layer_start == 0.2
+        and result.control_layer_end == 0.8
         and result.server_connect_retry_attempts == 7
         and result.server_connect_retry_delay == 9
         and result.download_retry_attempts == 4
@@ -549,6 +565,143 @@ def _create_model():
     connection = Connection()
     workflows = WorkflowCollection(connection)
     return Model(Document(), connection, workflows)
+
+
+class _FakeLayer:
+    def __init__(self, layer_type=LayerType.paint):
+        self.id = QUuid.createUuid()
+        self.type = layer_type
+        self.parent_layer = None
+
+
+class _FakeLayerStore(QObject):
+    removed = pyqtSignal(object)
+
+    def __init__(self, layer: _FakeLayer):
+        super().__init__()
+        self.active = layer
+        self.images = [layer]
+
+    def updated(self):
+        return self
+
+    def find(self, layer_id: QUuid):
+        return next((layer for layer in self.images if layer.id == layer_id), None)
+
+
+class _FakeJobs(QObject):
+    job_finished = pyqtSignal()
+
+
+class _FakeModel(QObject):
+    style_changed = pyqtSignal(object)
+    edit_mode_changed = pyqtSignal(bool)
+
+    def __init__(self, arch=Arch.sd15):
+        super().__init__()
+        layer = _FakeLayer()
+        self.arch = arch
+        self.layers = _FakeLayerStore(layer)
+        self.jobs = _FakeJobs()
+
+
+def _patch_root_connection(monkeypatch):
+    from ai_diffusion import root as root_module
+
+    monkeypatch.setattr(root_module.root, "_connection", Connection(), raising=False)
+
+
+def test_control_layer_uses_default_preset_settings(monkeypatch):
+    from ai_diffusion.control import ControlLayer, ControlPresets
+
+    _patch_root_connection(monkeypatch)
+    values = {
+        "control_layer_preset_value": settings.control_layer_preset_value,
+        "control_layer_use_custom_strength": settings.control_layer_use_custom_strength,
+        "control_layer_strength": settings.control_layer_strength,
+        "control_layer_start": settings.control_layer_start,
+        "control_layer_end": settings.control_layer_end,
+    }
+    try:
+        settings.control_layer_preset_value = 4
+        settings.control_layer_use_custom_strength = False
+        settings.control_layer_strength = 0.3
+        settings.control_layer_start = 0.1
+        settings.control_layer_end = 0.4
+
+        model = _FakeModel()
+        control = ControlLayer(model, ControlMode.depth, model.layers.active.id, 0)
+        expected = ControlPresets.instance().interpolate(
+            ControlMode.depth,
+            Arch.sd15,
+            settings.control_layer_preset_value / ControlLayer.max_preset_value,
+        )
+
+        assert control.preset_value == 4
+        assert control.use_custom_strength is False
+        assert control.strength == int(expected.strength * ControlLayer.strength_multiplier)
+        assert control.start == expected.range[0]
+        assert control.end == expected.range[1]
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
+
+
+def test_control_layer_uses_default_custom_settings(monkeypatch):
+    from ai_diffusion.control import ControlLayer
+
+    _patch_root_connection(monkeypatch)
+    values = {
+        "control_layer_preset_value": settings.control_layer_preset_value,
+        "control_layer_use_custom_strength": settings.control_layer_use_custom_strength,
+        "control_layer_strength": settings.control_layer_strength,
+        "control_layer_start": settings.control_layer_start,
+        "control_layer_end": settings.control_layer_end,
+    }
+    try:
+        settings.control_layer_preset_value = 1
+        settings.control_layer_use_custom_strength = True
+        settings.control_layer_strength = 1.2
+        settings.control_layer_start = 0.2
+        settings.control_layer_end = 0.8
+
+        model = _FakeModel()
+        control = ControlLayer(model, ControlMode.line_art, model.layers.active.id, 0)
+
+        assert control.preset_value == 1
+        assert control.use_custom_strength is True
+        assert control.strength == 60
+        assert control.start == 0.2
+        assert control.end == 0.8
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
+
+
+def test_control_layer_list_uses_and_updates_default_mode(monkeypatch):
+    from ai_diffusion.control import ControlLayerList
+
+    _patch_root_connection(monkeypatch)
+    original_mode = settings.control_layer_mode
+    try:
+        settings.control_layer_mode = ControlMode.pose
+        saved = []
+        monkeypatch.setattr(settings, "save", lambda path=None: saved.append(path))
+
+        control_list = ControlLayerList(_FakeModel())
+        control_list.add()
+
+        assert control_list[0].mode is ControlMode.pose
+
+        control_list[0].mode = ControlMode.depth
+
+        assert settings.control_layer_mode is ControlMode.depth
+        assert saved == [None]
+
+        control_list.add()
+        assert control_list[1].mode is ControlMode.depth
+    finally:
+        settings.control_layer_mode = original_mode
 
 
 def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
