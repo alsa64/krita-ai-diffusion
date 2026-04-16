@@ -82,6 +82,11 @@ class QueueMode(Enum):
     replace = 2
 
 
+class AnimationTargetLayerDefault(Enum):
+    active = "active_layer"
+    first = "first_image_layer"
+
+
 class Workspace(Enum):
     generation = 0
     upscaling = 1
@@ -1583,10 +1588,12 @@ class SamplingQuality(Enum):
 class AnimationWorkspace(QObject, ObservableProperties):
     sampling_quality = Property(SamplingQuality.fast, persist=True)
     target_layer = Property(QUuid(), persist=True)
+    target_layer_default = Property(AnimationTargetLayerDefault.active, persist=True)
     batch_mode = Property(True, persist=True)
 
     sampling_quality_changed = pyqtSignal(SamplingQuality)
     target_layer_changed = pyqtSignal(QUuid)
+    target_layer_default_changed = pyqtSignal(AnimationTargetLayerDefault)
     batch_mode_changed = pyqtSignal(bool)
     target_image_changed = pyqtSignal(Image)
     modified = pyqtSignal(QObject, str)
@@ -1743,6 +1750,20 @@ class AnimationWorkspace(QObject, ObservableProperties):
             bounds = Bounds(0, 0, *self._model.document.extent)
             image = layer.get_pixels(bounds)
             self.target_image_changed.emit(image)
+
+
+def select_default_animation_target_layer_id(
+    preference: AnimationTargetLayerDefault, active_layer: Layer | None, image_layers: list[Layer]
+):
+    if len(image_layers) == 0:
+        return None
+    if preference is AnimationTargetLayerDefault.active and active_layer is not None:
+        target = active_layer.parent_layer if active_layer.type.is_mask else active_layer
+        if target is not None:
+            for layer in image_layers:
+                if layer.id == target.id:
+                    return layer.id
+    return image_layers[0].id
 
 
 def get_selection_modifiers(

@@ -46,7 +46,7 @@ from ..defaults import defaults
 from ..localization import Localization
 from ..localization import translate as _
 from ..model.connection import ConnectionState, apply_performance_preset
-from ..model.model import Workspace
+from ..model.model import AnimationTargetLayerDefault, QueueMode, Workspace
 from ..model.properties import Binding
 from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
@@ -957,7 +957,19 @@ class WorkspaceDefaultsSettings(SettingsTab):
             "strength", SliderSetting(generation_defaults_schema["strength"], self, 0.0, 1.0, "{}")
         )
         self.generation.add(
+            "region_only",
+            SwitchSetting(generation_defaults_schema["region_only"], parent=self),
+        )
+        self.generation.add(
+            "edit_mode",
+            SwitchSetting(generation_defaults_schema["edit_mode"], parent=self),
+        )
+        self.generation.add(
             "batch_count", SpinBoxSetting(generation_defaults_schema["batch_count"], self, 1, 16)
+        )
+        self.generation.add(
+            "fixed_seed",
+            SwitchSetting(generation_defaults_schema["fixed_seed"], parent=self),
         )
         self.generation.add(
             "resolution_multiplier",
@@ -972,6 +984,9 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self.generation.add(
             "smart_rotate",
             SwitchSetting(generation_defaults_schema["smart_rotate"], parent=self),
+        )
+        self.generation.add(
+            "queue_mode", ComboBoxSetting(generation_defaults_schema["queue_mode"], parent=self)
         )
         self.generation.add(
             "translation_enabled",
@@ -1050,6 +1065,10 @@ class WorkspaceDefaultsSettings(SettingsTab):
             ComboBoxSetting(animation_defaults_schema["sampling_quality"], parent=self),
         )
         self.animation.add(
+            "target_layer_default",
+            ComboBoxSetting(animation_defaults_schema["target_layer_default"], parent=self),
+        )
+        self.animation.add(
             "batch_mode",
             SwitchSetting(animation_defaults_schema["batch_mode"], parent=self),
         )
@@ -1067,6 +1086,15 @@ class WorkspaceDefaultsSettings(SettingsTab):
             (_("Generate"), CustomGenerationMode.regular),
             (_("Generate Live"), CustomGenerationMode.live),
             (_("Generate Animation"), CustomGenerationMode.animation),
+        ])
+        cast(ComboBoxSetting, self.generation._widgets["queue_mode"]).set_items([
+            (_("At the Back"), QueueMode.back),
+            (_("In Front"), QueueMode.front),
+            (_("Replace Queue"), QueueMode.replace),
+        ])
+        cast(ComboBoxSetting, self.animation._widgets["target_layer_default"]).set_items([
+            (_("Active layer"), AnimationTargetLayerDefault.active),
+            (_("First image layer"), AnimationTargetLayerDefault.first),
         ])
 
         tabs.addTab(self.document, _("General"))

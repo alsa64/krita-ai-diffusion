@@ -20,8 +20,10 @@ from .model.control import ControlLayer, ControlLayerList
 from .model.custom_workflow import CustomGenerationMode, CustomWorkspace
 from .model.jobs import Job, JobKind, JobParams, JobQueue
 from .model.model import (
+    AnimationTargetLayerDefault,
     DocumentModel,
     InpaintContext,
+    QueueMode,
     SamplingQuality,
     TileOverlapMode,
     Workspace,
@@ -43,10 +45,14 @@ document_defaults_schema = {
 generation_defaults_schema = {
     "style": Setting(_("Style Preset"), "", _("Style selected for new documents.")),
     "strength": Setting(_("Strength"), 1.0),
+    "region_only": Setting(_("Region Only"), False),
+    "edit_mode": Setting(_("Edit Mode"), False),
     "batch_count": Setting(_("Batch Count"), 1),
+    "fixed_seed": Setting(_("Fixed Seed"), False),
     "resolution_multiplier": Setting(_("Resolution"), 1.5),
     "use_smart_resolution": Setting(_("Smart Resolution"), True),
     "smart_rotate": Setting(_("Smart Rotate"), False),
+    "queue_mode": Setting(_("Queue Mode"), QueueMode.back),
     "translation_enabled": Setting(_("Prompt Translation"), True),
     "layer_count": Setting(_("Layer Count"), 4),
     "inpaint_mode": Setting(_("Inpaint Mode"), InpaintMode.automatic),
@@ -79,6 +85,7 @@ live_defaults_schema = {
 
 animation_defaults_schema = {
     "sampling_quality": Setting(_("Sampling Quality"), SamplingQuality.fast),
+    "target_layer_default": Setting(_("Target Layer"), AnimationTargetLayerDefault.active),
     "batch_mode": Setting(_("Batch Mode"), True),
 }
 
@@ -148,10 +155,14 @@ class RecentlyUsedSync:
                 model.workspace = document["workspace"]
                 model.style = Styles.list().find(generation["style"]) or Styles.list().default
                 model.strength = generation["strength"]
+                model.region_only = generation["region_only"]
+                model.edit_mode = generation["edit_mode"]
                 model.batch_count = generation["batch_count"]
+                model.fixed_seed = generation["fixed_seed"]
                 model.resolution_multiplier = generation["resolution_multiplier"]
                 model.use_smart_resolution = generation["use_smart_resolution"]
                 model.smart_rotate = generation["smart_rotate"]
+                model.queue_mode = generation["queue_mode"]
                 model.translation_enabled = generation["translation_enabled"]
                 model.layer_count = generation["layer_count"]
                 model.inpaint.mode = generation["inpaint_mode"]
@@ -175,6 +186,7 @@ class RecentlyUsedSync:
                 model.live.recording_folder_name_format = live["recording_folder_name_format"]
 
                 model.animation.sampling_quality = animation["sampling_quality"]
+                model.animation.target_layer_default = animation["target_layer_default"]
                 model.animation.batch_mode = animation["batch_mode"]
 
                 model.custom.mode = custom["mode"]
@@ -187,7 +199,10 @@ class RecentlyUsedSync:
         model.workspace_changed.connect(self._set_document_default("workspace"))
         model.style_changed.connect(self._set(Workspace.generation, "style"))
         model.strength_changed.connect(self._set(Workspace.generation, "strength"))
+        model.region_only_changed.connect(self._set(Workspace.generation, "region_only"))
+        model.edit_mode_changed.connect(self._set(Workspace.generation, "edit_mode"))
         model.batch_count_changed.connect(self._set(Workspace.generation, "batch_count"))
+        model.fixed_seed_changed.connect(self._set(Workspace.generation, "fixed_seed"))
         model.resolution_multiplier_changed.connect(
             self._set(Workspace.generation, "resolution_multiplier")
         )
@@ -195,6 +210,7 @@ class RecentlyUsedSync:
             self._set(Workspace.generation, "use_smart_resolution")
         )
         model.smart_rotate_changed.connect(self._set(Workspace.generation, "smart_rotate"))
+        model.queue_mode_changed.connect(self._set(Workspace.generation, "queue_mode"))
         model.translation_enabled_changed.connect(
             self._set(Workspace.generation, "translation_enabled")
         )
@@ -230,6 +246,9 @@ class RecentlyUsedSync:
 
         model.animation.sampling_quality_changed.connect(
             self._set(Workspace.animation, "sampling_quality")
+        )
+        model.animation.target_layer_default_changed.connect(
+            self._set(Workspace.animation, "target_layer_default")
         )
         model.animation.batch_mode_changed.connect(self._set(Workspace.animation, "batch_mode"))
 
@@ -282,10 +301,14 @@ class RecentlyUsedSync:
             {
                 "style": legacy.get("style", ""),
                 "strength": legacy.get("strength", 1.0),
+                "region_only": legacy.get("region_only", False),
+                "edit_mode": legacy.get("edit_mode", False),
                 "batch_count": legacy.get("batch_count", 1),
+                "fixed_seed": legacy.get("fixed_seed", False),
                 "resolution_multiplier": legacy.get("resolution_multiplier", 1.5),
                 "use_smart_resolution": legacy.get("use_smart_resolution", True),
                 "smart_rotate": legacy.get("smart_rotate", False),
+                "queue_mode": legacy.get("queue_mode", QueueMode.back.name),
                 "translation_enabled": legacy.get("translation_enabled", True),
                 "layer_count": legacy.get("layer_count", 4),
                 "inpaint_mode": legacy.get("inpaint_mode", InpaintMode.automatic.name),

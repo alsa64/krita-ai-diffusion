@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 
 from ..image import Extent, Image
 from ..localization import translate as _
-from ..model.model import DocumentModel
+from ..model.model import DocumentModel, select_default_animation_target_layer_id
 from ..model.properties import Bind, Binding, bind, bind_combo, bind_toggle
 from ..model.root import root
 from ..settings import settings
@@ -195,12 +195,18 @@ class AnimationWidget(QWidget):
             self.target_layer.clear()
             for layer in self._model.layers.images:
                 self.target_layer.addItem(_("Target layer") + f": {layer.name}", layer.id)
-        if self.model.animation.target_layer.isNull():
-            self.model.animation.target_layer = self.target_layer.currentData()
-        else:
-            current_index = self.target_layer.findData(self.model.animation.target_layer)
-            if current_index >= 0:
-                self.target_layer.setCurrentIndex(current_index)
+        current_index = self.target_layer.findData(self.model.animation.target_layer)
+        if current_index >= 0:
+            self.target_layer.setCurrentIndex(current_index)
+            return
+
+        target_layer = select_default_animation_target_layer_id(
+            self.model.animation.target_layer_default,
+            self._model.layers.active,
+            self._model.layers.images,
+        )
+        if target_layer is not None:
+            self.model.animation.target_layer = target_layer
 
     def show_result(self, image: Image):
         target = Extent.from_qsize(self.preview_area.size())
