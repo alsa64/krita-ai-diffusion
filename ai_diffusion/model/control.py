@@ -70,7 +70,7 @@ class ControlLayer(QObject, ObservableProperties):
         self._strength = max(
             0,
             min(
-                int(round(settings.control_layer_strength * self.strength_multiplier)),
+                round(settings.control_layer_strength * self.strength_multiplier),
                 self.max_strength,
             ),
         )

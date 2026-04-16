@@ -211,10 +211,18 @@ class Settings(QObject):
     )
 
     server_authorization: str
-    _server_authorization = Setting("ComfyUI Authorization Token", "")
+    _server_authorization = Setting(
+        "ComfyUI Authorization Token",
+        "",
+        _("Authorization token sent when connecting to a protected external ComfyUI server"),
+    )
 
     check_server_resources: bool
-    _check_server_resources = Setting("Refuse connection if nodes or models are missing", True)
+    _check_server_resources = Setting(
+        "Refuse connection if nodes or models are missing",
+        True,
+        _("Block the connection when required custom nodes or models are missing"),
+    )
 
     server_connect_retry_attempts: int
     _server_connect_retry_attempts = Setting(
@@ -538,12 +546,7 @@ class Settings(QObject):
     recent_styles: list[str]
     _recent_styles = Setting(
         "Recent Styles",
-        [
-            "built-in/edit-flux2.json",
-            "built-in/anime-illustrious.json",
-            "built-in/cinematic-photo-zimage.json",
-            "built-in/digital-artwork-xl.json",
-        ],
+        [],
     )
 
     history_size: int
