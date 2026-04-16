@@ -24,7 +24,7 @@ from ai_diffusion.connection import Connection
 from ai_diffusion.custom_workflow import WorkflowCollection
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
-from ai_diffusion.model import Model, Workspace
+from ai_diffusion.model import Model, TileOverlapMode, Workspace
 from ai_diffusion.persistence import (
     RecentlyUsedSync,
     load_document_defaults,
@@ -88,6 +88,9 @@ def test_save():
     original.color_match_edit = True
     original.upscale_model = "custom-default.pth"
     original.upscale_model_small = "custom-small.pth"
+    original.upscale_highres_refine_strength = 0.55
+    original.upscale_tile_overlap_auto_base = 24
+    original.upscale_tile_overlap_auto_denoise = 80
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -102,6 +105,9 @@ def test_save():
         and result.color_match_edit
         and result.upscale_model == "custom-default.pth"
         and result.upscale_model_small == "custom-small.pth"
+        and result.upscale_highres_refine_strength == 0.55
+        and result.upscale_tile_overlap_auto_base == 24
+        and result.upscale_tile_overlap_auto_denoise == 80
     )
 
 
@@ -256,8 +262,16 @@ def test_workspace_defaults_roundtrip(tmp_path):
                 "inpaint_mode": InpaintMode.custom.name,
             },
         )
+        save_workspace_defaults(
+            Workspace.upscaling,
+            {
+                "tile_overlap_mode": TileOverlapMode.custom.name,
+                "tile_overlap": 160,
+            },
+        )
 
         values = load_workspace_defaults(Workspace.generation)
+        upscale_values = load_workspace_defaults(Workspace.upscaling)
 
         assert values["strength"] == 0.6
         assert values["batch_count"] == 3
@@ -267,6 +281,9 @@ def test_workspace_defaults_roundtrip(tmp_path):
         assert values["layer_count"] == 6
         assert values["inpaint_mode"] is InpaintMode.custom
         assert values["translation_enabled"] is True
+        assert upscale_values["tile_overlap_mode"] is TileOverlapMode.custom
+        assert upscale_values["tile_overlap"] == 160
+        assert upscale_values["use_diffusion"] is True
     finally:
         defaults._path = original_path
 
@@ -299,11 +316,14 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
             "smart_rotate": True,
             "layer_count": 8,
             "inpaint_mode": InpaintMode.custom.name,
+            "tile_overlap_mode": TileOverlapMode.custom.name,
+            "tile_overlap": 192,
         }
 
         RecentlyUsedSync.from_settings()
         document = load_document_defaults()
         values = load_workspace_defaults(Workspace.generation)
+        upscale_values = load_workspace_defaults(Workspace.upscaling)
 
         assert document["workspace"] is Workspace.live
         assert values["style"] == "preset.json"
@@ -314,6 +334,8 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
         assert values["smart_rotate"] is True
         assert values["layer_count"] == 8
         assert values["inpaint_mode"] is InpaintMode.custom
+        assert upscale_values["tile_overlap_mode"] is TileOverlapMode.custom
+        assert upscale_values["tile_overlap"] == 192
     finally:
         settings.document_defaults = previous_document_defaults
         defaults._path = original_path
