@@ -19,7 +19,13 @@ from .localization import translate as _
 from .model.control import ControlLayer, ControlLayerList
 from .model.custom_workflow import CustomWorkspace
 from .model.jobs import Job, JobKind, JobParams, JobQueue
-from .model.model import DocumentModel, InpaintContext, SamplingQuality, Workspace
+from .model.model import (
+    DocumentModel,
+    InpaintContext,
+    SamplingQuality,
+    TileOverlapMode,
+    Workspace,
+)
 from .model.properties import deserialize, serialize
 from .model.region import Region, RootRegion
 from .settings import Setting, settings
@@ -56,6 +62,8 @@ upscaling_defaults_schema = {
     "use_diffusion": Setting(_("Use Diffusion"), True),
     "strength": Setting(_("Strength"), 0.3),
     "unblur_strength": Setting(_("Image Guidance"), 0.5),
+    "tile_overlap_mode": Setting(_("Tile Overlap Mode"), TileOverlapMode.auto),
+    "tile_overlap": Setting(_("Tile Overlap"), 128),
     "use_prompt": Setting(_("Use Prompt"), False),
 }
 
@@ -138,6 +146,8 @@ class RecentlyUsedSync:
                 model.upscale.use_diffusion = upscaling["use_diffusion"]
                 model.upscale.strength = upscaling["strength"]
                 model.upscale.unblur_strength = upscaling["unblur_strength"]
+                model.upscale.tile_overlap_mode = upscaling["tile_overlap_mode"]
+                model.upscale.tile_overlap = upscaling["tile_overlap"]
                 model.upscale.use_prompt = upscaling["use_prompt"]
 
                 model.live.strength = live["strength"]
@@ -179,6 +189,10 @@ class RecentlyUsedSync:
         model.upscale.unblur_strength_changed.connect(
             self._set(Workspace.upscaling, "unblur_strength")
         )
+        model.upscale.tile_overlap_mode_changed.connect(
+            self._set(Workspace.upscaling, "tile_overlap_mode")
+        )
+        model.upscale.tile_overlap_changed.connect(self._set(Workspace.upscaling, "tile_overlap"))
         model.upscale.use_prompt_changed.connect(self._set(Workspace.upscaling, "use_prompt"))
 
         model.live.strength_changed.connect(self._set(Workspace.live, "strength"))
@@ -248,6 +262,8 @@ class RecentlyUsedSync:
             Workspace.upscaling,
             {
                 "upscale_model": legacy.get("upscale_model", ""),
+                "tile_overlap_mode": legacy.get("tile_overlap_mode", TileOverlapMode.auto.name),
+                "tile_overlap": legacy.get("tile_overlap", 128),
             },
         )
 

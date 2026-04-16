@@ -302,6 +302,29 @@ class Settings(QObject):
         _("Default model for small automatic upscaling refinement passes."),
     )
 
+    upscale_highres_refine_strength: float
+    _upscale_highres_refine_strength = Setting(
+        _("High-Res Refine Strength"),
+        0.4,
+        _("Denoise strength used for automatic high-resolution refinement after upscaling."),
+    )
+
+    upscale_tile_overlap_auto_base: int
+    _upscale_tile_overlap_auto_base = Setting(
+        _("Automatic Tile Overlap Base"),
+        16,
+        _("Base overlap in pixels used when tiled upscale tile overlap is set to Automatic."),
+    )
+
+    upscale_tile_overlap_auto_denoise: int
+    _upscale_tile_overlap_auto_denoise = Setting(
+        _("Automatic Tile Overlap Denoise Scale"),
+        64,
+        _(
+            "Additional overlap in pixels scaled by denoise strength when tiled upscale tile overlap is set to Automatic."
+        ),
+    )
+
     save_image_format: ImageFileFormat
     _save_image_format = Setting(
         _("Save Image Format"),

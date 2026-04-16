@@ -134,6 +134,24 @@ def create(kind: WorkflowKind, client: Client, **kwargs):
     return workflow.prepare(kind, models=client.models, loras=prompt.loras, **kwargs)
 
 
+def test_highres_refine_sampler_params_uses_setting(monkeypatch):
+    monkeypatch.setattr(settings, "upscale_highres_refine_strength", 0.6)
+
+    sampling = SamplingInput("dpmpp_2m", "normal", 7.0, 20, seed=1)
+    params = workflow._highres_refine_sampler_params(sampling, Extent(1024, 1024))
+
+    assert (params["steps"], params["start_at_step"]) == workflow.apply_strength(0.6, 20)
+
+
+def test_auto_upscale_tile_layout_uses_settings(monkeypatch):
+    monkeypatch.setattr(settings, "upscale_tile_overlap_auto_base", 24)
+    monkeypatch.setattr(settings, "upscale_tile_overlap_auto_denoise", 80)
+
+    layout = workflow._auto_upscale_tile_layout(Extent(1024, 1024), 512, 0.5, 8)
+
+    assert layout.padding == 64
+
+
 counter = 0
 
 

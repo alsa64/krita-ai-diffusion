@@ -708,6 +708,18 @@ class DiffusionSettings(SettingsTab):
         )
         self.add("upscale_model", ComboBoxSetting(S._upscale_model, parent=self))
         self.add("upscale_model_small", ComboBoxSetting(S._upscale_model_small, parent=self))
+        self.add(
+            "upscale_highres_refine_strength",
+            SliderSetting(S._upscale_highres_refine_strength, self, 0.0, 1.0, "{}"),
+        )
+        self.add(
+            "upscale_tile_overlap_auto_base",
+            SpinBoxSetting(S._upscale_tile_overlap_auto_base, self, 0, 512, 8, " px"),
+        )
+        self.add(
+            "upscale_tile_overlap_auto_denoise",
+            SpinBoxSetting(S._upscale_tile_overlap_auto_denoise, self, 0, 512, 8, " px"),
+        )
         self.add("nsfw_filter", ComboBoxSetting(S._nsfw_filter, parent=self))
 
         nsfw_settings = [(_("Disabled"), 0.0), (_("Basic"), 0.65), (_("Strict"), 0.8)]
@@ -1002,6 +1014,14 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self.upscaling.add(
             "unblur_strength",
             SliderSetting(upscaling_defaults_schema["unblur_strength"], self, 0.0, 1.0, "{}"),
+        )
+        self.upscaling.add(
+            "tile_overlap_mode",
+            ComboBoxSetting(upscaling_defaults_schema["tile_overlap_mode"], parent=self),
+        )
+        self.upscaling.add(
+            "tile_overlap",
+            SpinBoxSetting(upscaling_defaults_schema["tile_overlap"], self, 0, 512, 8, " px"),
         )
         self.upscaling.add(
             "use_prompt", SwitchSetting(upscaling_defaults_schema["use_prompt"], parent=self)

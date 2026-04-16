@@ -115,6 +115,10 @@ def _sampler_params(sampling: SamplingInput, extent: Extent, strength: float | N
     return params
 
 
+def _highres_refine_sampler_params(sampling: SamplingInput, extent: Extent):
+    return _sampler_params(sampling, extent, strength=settings.upscale_highres_refine_strength)
+
+
 def load_checkpoint_with_lora(w: ComfyWorkflow, checkpoint: CheckpointInput, models: ClientModels):
     arch = checkpoint.version
     model_info = models.checkpoints.get(checkpoint.checkpoint)
@@ -849,7 +853,7 @@ def scale_refine_and_decode(
     upscale = w.upscale_image(upscale_model, decoded)
     upscale = w.scale_image(upscale, extent.desired)
     latent = vae_encode(w, vae, upscale, tiled_vae)
-    params = _sampler_params(sampling, extent.desired, strength=0.4)
+    params = _highres_refine_sampler_params(sampling, extent.desired)
 
     prompt = encode_prompt(w, cond, clip, regions)
     model, prompt = apply_control(w, model, prompt, cond.all_control, extent.desired, vae, models)
@@ -1468,7 +1472,7 @@ def upscale_tiled(
     if upscale.tile_overlap >= 0:
         layout = TileLayout(extent.initial, extent.desired.width, upscale.tile_overlap, multiple)
     else:
-        layout = TileLayout.from_denoise_strength(
+        layout = _auto_upscale_tile_layout(
             extent.initial, extent.desired.width, sampling.denoise_strength, multiple
         )
 
@@ -1536,6 +1540,14 @@ def upscale_tiled(
         out_image = scale(extent.initial, extent.target, ScaleMode.resize, w, out_image, models)
     w.send_image(out_image)
     return w
+
+
+def _auto_upscale_tile_layout(extent: Extent, min_tile_size: int, strength: float, multiple: int):
+    padding = round(
+        settings.upscale_tile_overlap_auto_base
+        + settings.upscale_tile_overlap_auto_denoise * strength
+    )
+    return TileLayout(extent, min_tile_size, padding, multiple)
 
 
 def expand_custom(
