@@ -15,6 +15,7 @@ from ai_diffusion.backend.api import (
     WorkflowKind,
 )
 from ai_diffusion.backend.client import ClientEvent, ClientModels, resolve_arch
+from ai_diffusion.backend.cloud_client import CloudClient
 from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_url
 from ai_diffusion.backend.network import NetworkError
 from ai_diffusion.backend.resources import ControlMode, ResourceKind, UpscalerName, resource_id
@@ -194,6 +195,106 @@ def test_configurable_default_upscalers_fall_back(monkeypatch):
     monkeypatch.setattr(settings, "upscale_model_small", "missing-small.pth")
     assert models.default_upscaler == "fallback-default.pth"
     assert models.default_upscaler_small == "fallback-small.pth"
+
+
+@pytest.mark.asyncio
+async def test_comfy_client_uses_configured_timeouts(monkeypatch):
+    class StubRequests:
+        def __init__(self):
+            self.calls = []
+
+        async def get(self, url, timeout=None, bearer=None):
+            self.calls.append(("get", url, timeout, bearer))
+            return {}
+
+        async def download(self, url, timeout=None):
+            self.calls.append(("download", url, timeout))
+            raise RuntimeError("download failed")
+
+    client = ComfyClient("http://example.com")
+    client._requests = StubRequests()
+    monkeypatch.setattr(settings, "comfy_get_timeout", 77)
+    monkeypatch.setattr(settings, "comfy_result_image_timeout", 321)
+
+    await client._get("system_stats")
+    assert client._requests.calls[0] == ("get", "http://example.com/system_stats", 77, None)
+
+    with pytest.raises(RuntimeError, match="download failed"):
+        await client._transfer_result_image("abc")
+    assert client._requests.calls[1] == (
+        "download",
+        "http://example.com/api/etn/image/abc",
+        321,
+    )
+
+
+@pytest.mark.asyncio
+async def test_cloud_sign_in_uses_configured_timeout_and_poll_interval(monkeypatch):
+    client = CloudClient("https://example.com")
+    calls = []
+    statuses = iter([
+        {"url": "/auth"},
+        {"status": "not-found"},
+        {"status": "authorized", "token": "token-123"},
+    ])
+
+    async def fake_post(op, data):
+        calls.append((op, data))
+        return next(statuses)
+
+    sleeps = []
+
+    async def fake_sleep(interval):
+        sleeps.append(interval)
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(settings, "cloud_sign_in_timeout", 123)
+    monkeypatch.setattr(settings, "cloud_auth_poll_interval", 4.5)
+
+    values = []
+    async for value in client.sign_in():
+        values.append(value)
+
+    assert values == [f"{client.default_web_url}/auth", "token-123"]
+    assert sleeps == [4.5]
+    assert [op for op, _ in calls] == ["auth/initiate", "auth/confirm", "auth/confirm"]
+
+
+@pytest.mark.asyncio
+async def test_cloud_generate_uses_configured_job_poll_interval(monkeypatch):
+    client = CloudClient("https://example.com")
+    job = type("Job", (), {"input": {}, "local_id": "local", "state": None})()
+    client._user = type("User", (), {"credits": 10})()
+
+    responses = iter([
+        {"id": "remote", "worker_id": "worker", "status": "IN_QUEUE", "user": None},
+        {"status": "IN_PROGRESS", "output": {"progress": 0.5}},
+        {"status": "COMPLETED", "output": {"images": {"offsets": [0, 1], "base64": "AA=="}}},
+    ])
+
+    async def fake_post(op, data):
+        return next(responses)
+
+    sleeps = []
+
+    async def fake_sleep(interval):
+        sleeps.append(interval)
+
+    async def fake_report(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_report", fake_report)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(settings, "cloud_job_poll_interval", 1.75)
+
+    await client._generate(job)
+
+    assert job.remote_id == "remote"
+    assert job.worker_id == "worker"
+    assert job.output == {"images": {"offsets": [0, 1], "base64": "AA=="}}
+    assert sleeps == [1.75, 1.75]
 
 
 def check_resolve_sd_version(client: ComfyClient, arch: Arch):

@@ -119,6 +119,12 @@ def test_save():
     original.download_retry_attempts = 4
     original.download_retry_delay = 3
     original.download_inactivity_timeout = 45
+    original.comfy_get_timeout = 75
+    original.comfy_result_image_timeout = 420
+    original.cloud_sign_in_timeout = 360
+    original.cloud_auth_poll_interval = 3.5
+    original.cloud_job_poll_interval = 0.8
+    original.auto_update_check_timeout = 12
     original.flux_inpaint_cfg_scale = 27.5
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
@@ -151,6 +157,12 @@ def test_save():
         and result.download_retry_attempts == 4
         and result.download_retry_delay == 3
         and result.download_inactivity_timeout == 45
+        and result.comfy_get_timeout == 75
+        and result.comfy_result_image_timeout == 420
+        and result.cloud_sign_in_timeout == 360
+        and result.cloud_auth_poll_interval == 3.5
+        and result.cloud_job_poll_interval == 0.8
+        and result.auto_update_check_timeout == 12
         and result.flux_inpaint_cfg_scale == 27.5
     )
 
