@@ -81,12 +81,27 @@ live_defaults_schema = {
         "{document_name}.live-frames",
         "Template for naming the folder used for recorded live frames. Available keys: {document_name}, {document_file}.",
     ),
+    "recording_frame_name_format": Setting(
+        _("Recording Frame Name Template"),
+        "frame-{index}.{extension}",
+        "Template for naming recorded live frames. Available keys: {index}, {extension}.",
+    ),
 }
 
 animation_defaults_schema = {
     "sampling_quality": Setting(_("Sampling Quality"), SamplingQuality.fast),
     "target_layer_default": Setting(_("Target Layer"), AnimationTargetLayerDefault.active),
     "batch_mode": Setting(_("Batch Mode"), True),
+    "batch_folder_name_format": Setting(
+        _("Batch Output Folder Template"),
+        "{document_name}.animation",
+        "Template for naming the animation batch output folder. Available keys: {document_name}, {document_file}.",
+    ),
+    "batch_frame_name_format": Setting(
+        _("Batch Frame Name Template"),
+        "frame-{frame}.{extension}",
+        "Template for naming generated animation batch frames. Available keys: {frame}, {extension}.",
+    ),
 }
 
 custom_defaults_schema = {
@@ -184,10 +199,13 @@ class RecentlyUsedSync:
                 model.live.strength = live["strength"]
                 model.live.recording_format = live["recording_format"]
                 model.live.recording_folder_name_format = live["recording_folder_name_format"]
+                model.live.recording_frame_name_format = live["recording_frame_name_format"]
 
                 model.animation.sampling_quality = animation["sampling_quality"]
                 model.animation.target_layer_default = animation["target_layer_default"]
                 model.animation.batch_mode = animation["batch_mode"]
+                model.animation.batch_folder_name_format = animation["batch_folder_name_format"]
+                model.animation.batch_frame_name_format = animation["batch_frame_name_format"]
 
                 model.custom.mode = custom["mode"]
                 model.custom.params_ui_height = custom["params_ui_height"]
@@ -243,6 +261,9 @@ class RecentlyUsedSync:
         model.live.recording_folder_name_format_changed.connect(
             self._set(Workspace.live, "recording_folder_name_format")
         )
+        model.live.recording_frame_name_format_changed.connect(
+            self._set(Workspace.live, "recording_frame_name_format")
+        )
 
         model.animation.sampling_quality_changed.connect(
             self._set(Workspace.animation, "sampling_quality")
@@ -251,6 +272,12 @@ class RecentlyUsedSync:
             self._set(Workspace.animation, "target_layer_default")
         )
         model.animation.batch_mode_changed.connect(self._set(Workspace.animation, "batch_mode"))
+        model.animation.batch_folder_name_format_changed.connect(
+            self._set(Workspace.animation, "batch_folder_name_format")
+        )
+        model.animation.batch_frame_name_format_changed.connect(
+            self._set(Workspace.animation, "batch_frame_name_format")
+        )
 
         model.custom.workflow_id_changed.connect(self._set(Workspace.custom, "workflow_id"))
         model.custom.mode_changed.connect(self._set(Workspace.custom, "mode"))

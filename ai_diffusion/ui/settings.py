@@ -870,6 +870,35 @@ class InterfaceSettings(SettingsTab):
         self.add("new_seed_after_apply", SwitchSetting(S._new_seed_after_apply, parent=self))
         self.add("save_image_format", ComboBoxSetting(S._save_image_format, parent=self))
         self.add("save_image_metadata", SwitchSetting(S._save_image_metadata, parent=self))
+        self.add(
+            "save_image_file_name_format",
+            TextSetting(S._save_image_file_name_format, parent=self),
+        )
+        self.add(
+            "preview_layer_name_format",
+            TextSetting(S._preview_layer_name_format, parent=self),
+        )
+        self.add("apply_layer_name_format", TextSetting(S._apply_layer_name_format, parent=self))
+        self.add(
+            "generated_layer_name_prefix",
+            TextSetting(S._generated_layer_name_prefix, parent=self),
+        )
+        self.add(
+            "layered_batch_prefix_format",
+            TextSetting(S._layered_batch_prefix_format, parent=self),
+        )
+        self.add(
+            "animation_layer_name_format",
+            TextSetting(S._animation_layer_name_format, parent=self),
+        )
+        self.add(
+            "animation_import_layer_name_format",
+            TextSetting(S._animation_import_layer_name_format, parent=self),
+        )
+        self.add(
+            "live_recording_layer_name_format",
+            TextSetting(S._live_recording_layer_name_format, parent=self),
+        )
         self.add("debug_dump_workflow", SwitchSetting(S._debug_dump_workflow, parent=self))
 
         self._widgets["save_image_format"].value_changed.connect(self._update_image_format_widgets)
@@ -1117,6 +1146,10 @@ class WorkspaceDefaultsSettings(SettingsTab):
             "recording_folder_name_format",
             TextSetting(live_defaults_schema["recording_folder_name_format"], parent=self),
         )
+        self.live.add(
+            "recording_frame_name_format",
+            TextSetting(live_defaults_schema["recording_frame_name_format"], parent=self),
+        )
 
         self.animation = WorkspaceDefaultsPage(_("Animation"), Workspace.animation)
         self.animation.add(
@@ -1130,6 +1163,14 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self.animation.add(
             "batch_mode",
             SwitchSetting(animation_defaults_schema["batch_mode"], parent=self),
+        )
+        self.animation.add(
+            "batch_folder_name_format",
+            TextSetting(animation_defaults_schema["batch_folder_name_format"], parent=self),
+        )
+        self.animation.add(
+            "batch_frame_name_format",
+            TextSetting(animation_defaults_schema["batch_frame_name_format"], parent=self),
         )
 
         self.custom = WorkspaceDefaultsPage(_("Custom"), Workspace.custom)
