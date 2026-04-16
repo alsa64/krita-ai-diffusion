@@ -21,7 +21,7 @@ sys.modules.setdefault("krita", krita)
 
 from ai_diffusion.api import InpaintMode
 from ai_diffusion.connection import Connection
-from ai_diffusion.custom_workflow import WorkflowCollection
+from ai_diffusion.custom_workflow import CustomGenerationMode, WorkflowCollection
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
 from ai_diffusion.model import (
@@ -382,6 +382,28 @@ def test_live_workspace_defaults_roundtrip(tmp_path):
         defaults._path = original_path
 
 
+def test_custom_workspace_defaults_roundtrip(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.custom,
+            {
+                "workflow_id": "graph/default",
+                "mode": CustomGenerationMode.live.name,
+                "params_ui_height": 320,
+            },
+        )
+
+        values = load_workspace_defaults(Workspace.custom)
+
+        assert values["workflow_id"] == "graph/default"
+        assert values["mode"] is CustomGenerationMode.live
+        assert values["params_ui_height"] == 320
+    finally:
+        defaults._path = original_path
+
+
 def test_live_recording_paths_use_settings():
     document_path = Path("/tmp/demo.kra")
 
@@ -525,6 +547,50 @@ def test_recently_used_sync_tracks_workspace_and_generation_defaults(tmp_path):
         assert values["use_smart_resolution"] is False
         assert values["smart_rotate"] is True
         assert values["layer_count"] == 5
+    finally:
+        defaults._path = original_path
+
+
+def test_recently_used_sync_applies_new_document_custom_defaults(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_workspace_defaults(
+            Workspace.custom,
+            {
+                "workflow_id": "graph/default",
+                "mode": CustomGenerationMode.animation.name,
+                "params_ui_height": 280,
+            },
+        )
+
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        assert model.custom.workflow_id == "graph/default"
+        assert model.custom.mode is CustomGenerationMode.animation
+        assert model.custom.params_ui_height == 280
+    finally:
+        defaults._path = original_path
+
+
+def test_recently_used_sync_tracks_custom_workspace_defaults(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        model.custom.workflow_id = "graph/default"
+        model.custom.mode = CustomGenerationMode.live
+        model.custom.params_ui_height = 360
+
+        values = load_workspace_defaults(Workspace.custom)
+        assert values["workflow_id"] == "graph/default"
+        assert values["mode"] is CustomGenerationMode.live
+        assert values["params_ui_height"] == 360
     finally:
         defaults._path = original_path
 

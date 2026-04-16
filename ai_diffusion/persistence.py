@@ -17,7 +17,7 @@ from .defaults import defaults
 from .image import ImageCollection
 from .localization import translate as _
 from .model.control import ControlLayer, ControlLayerList
-from .model.custom_workflow import CustomWorkspace
+from .model.custom_workflow import CustomGenerationMode, CustomWorkspace
 from .model.jobs import Job, JobKind, JobParams, JobQueue
 from .model.model import (
     DocumentModel,
@@ -82,11 +82,24 @@ animation_defaults_schema = {
     "batch_mode": Setting(_("Batch Mode"), True),
 }
 
+custom_defaults_schema = {
+    "workflow_id": Setting(
+        _("Workflow"), "", _("Workflow selected for new custom-workspace documents.")
+    ),
+    "mode": Setting(_("Mode"), CustomGenerationMode.regular),
+    "params_ui_height": Setting(
+        _("Parameters Height"),
+        100,
+        _("Initial height of the custom workflow parameters area in new documents."),
+    ),
+}
+
 workspace_defaults_schema = {
     Workspace.generation: generation_defaults_schema,
     Workspace.upscaling: upscaling_defaults_schema,
     Workspace.live: live_defaults_schema,
     Workspace.animation: animation_defaults_schema,
+    Workspace.custom: custom_defaults_schema,
 }
 
 
@@ -130,6 +143,7 @@ class RecentlyUsedSync:
                 upscaling = load_workspace_defaults(Workspace.upscaling)
                 live = load_workspace_defaults(Workspace.live)
                 animation = load_workspace_defaults(Workspace.animation)
+                custom = load_workspace_defaults(Workspace.custom)
 
                 model.workspace = document["workspace"]
                 model.style = Styles.list().find(generation["style"]) or Styles.list().default
@@ -162,6 +176,11 @@ class RecentlyUsedSync:
 
                 model.animation.sampling_quality = animation["sampling_quality"]
                 model.animation.batch_mode = animation["batch_mode"]
+
+                model.custom.mode = custom["mode"]
+                model.custom.params_ui_height = custom["params_ui_height"]
+                if workflow_id := custom["workflow_id"]:
+                    model.custom.workflow_id = workflow_id
         except Exception as e:
             log.warning(f"Failed to apply default settings to new document: {type(e)} {e}")
 
@@ -213,6 +232,12 @@ class RecentlyUsedSync:
             self._set(Workspace.animation, "sampling_quality")
         )
         model.animation.batch_mode_changed.connect(self._set(Workspace.animation, "batch_mode"))
+
+        model.custom.workflow_id_changed.connect(self._set(Workspace.custom, "workflow_id"))
+        model.custom.mode_changed.connect(self._set(Workspace.custom, "mode"))
+        model.custom.params_ui_height_changed.connect(
+            self._set(Workspace.custom, "params_ui_height")
+        )
 
     def _set(self, workspace: Workspace, key: str):
         def setter(value):
