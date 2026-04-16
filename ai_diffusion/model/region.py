@@ -10,7 +10,7 @@ from ..backend.api import ConditioningInput, RegionInput
 from ..backend.client import Client
 from ..document import Layer, LayerType
 from ..image import Bounds, Extent, Image
-from ..settings import settings
+from ..settings import Settings, settings
 from ..style import Style
 from . import model
 from .control import ControlLayerList
@@ -252,10 +252,10 @@ class RootRegion(QObject, ObservableProperties):
         if can_link:
             layer = target
         elif group:
-            layer = layers.create_group(f"Region {len(self)}")
-            layers.create("Paint layer", parent=layer)
+            layer = layers.create_group(_format_new_region_name(len(self)))
+            layers.create(settings.new_region_layer_name, parent=layer)
         else:
-            layer = layers.create(f"Region {len(self)}")
+            layer = layers.create(_format_new_region_name(len(self)))
         return self._add(layer)
 
     def remove(self, region: Region):
@@ -372,6 +372,13 @@ class RootRegion(QObject, ObservableProperties):
 
     def __iter__(self):
         return iter(self._regions)
+
+
+def _format_new_region_name(index: int):
+    try:
+        return settings.new_region_name.format(index=index)
+    except (IndexError, KeyError, ValueError):
+        return Settings._new_region_name.default.format(index=index)
 
 
 def translate_prompt(region: Region | RootRegion):

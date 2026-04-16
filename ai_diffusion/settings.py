@@ -383,6 +383,36 @@ class Settings(QObject):
         _("End of the control guidance range used for new control layers with custom values."),
     )
 
+    new_region_name: str
+    _new_region_name = Setting(
+        _("Default New Region Name"),
+        _("Region {index}"),
+        _("Template used when creating new regions. Available keys: {keys}.").format(
+            keys="{index}"
+        ),
+    )
+
+    new_region_layer_name: str
+    _new_region_layer_name = Setting(
+        _("Default New Region Paint Layer Name"),
+        _("Paint layer"),
+        _("Name used for the paint layer created inside new region groups."),
+    )
+
+    new_style_name: str
+    _new_style_name = Setting(
+        _("Default New Style Name"),
+        _("New Style"),
+        _("Name used when creating a new style."),
+    )
+
+    new_style_copy_name: str
+    _new_style_copy_name = Setting(
+        _("Default Copied Style Name"),
+        _("{name} (Copy)"),
+        _("Template used when duplicating styles. Available keys: {keys}.").format(keys="{name}"),
+    )
+
     upscale_model: str
     _upscale_model = Setting(
         _("Default Upscale Model"),

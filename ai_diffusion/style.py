@@ -13,7 +13,7 @@ from .backend.api import CheckpointInput, LoraInput
 from .backend.resources import Arch
 from .defaults import defaults
 from .localization import translate as _
-from .settings import Setting, settings
+from .settings import Setting, Settings, settings
 from .util import client_logger as log
 from .util import encode_json, find_unused_path, plugin_dir, read_json_with_comments, user_data_dir
 
@@ -300,14 +300,17 @@ class Styles(QObject):
         path = find_unused_path(self.user_folder / filename)
         new_style = Style(path)
         apply_style_defaults(new_style)
-        new_style.name = _("New Style")
+        new_style.name = settings.new_style_name
         if checkpoint:
             new_style.checkpoints = [checkpoint]
         if copy_from:
             for name, setting in StyleSettings.__dict__.items():
                 if isinstance(setting, Setting):
                     setattr(new_style, name, copy(getattr(copy_from, name)))
-            new_style.name = f"{copy_from.name} (Copy)"
+            try:
+                new_style.name = settings.new_style_copy_name.format(name=copy_from.name)
+            except (IndexError, KeyError, ValueError):
+                new_style.name = Settings._new_style_copy_name.default.format(name=copy_from.name)
         self._list.append(new_style)
         new_style.save()
         self.changed.emit()
