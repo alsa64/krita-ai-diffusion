@@ -54,6 +54,7 @@ from ai_diffusion.persistence import (
     save_document_defaults,
     save_workspace_defaults,
 )
+from ai_diffusion.region import RootRegion
 from ai_diffusion.resources import Arch, ControlMode
 from ai_diffusion.settings import (
     ImageFileFormat,
@@ -159,6 +160,10 @@ def test_save():
     original.animation_layer_name_format = "Anim::{prompt}"
     original.animation_import_layer_name_format = "Batch::{start}-{end}:{prompt}"
     original.live_recording_layer_name_format = "Rec::{start}-{end}:{prompt}"
+    original.new_region_name = "Area {index}"
+    original.new_region_layer_name = "Base paint"
+    original.new_style_name = "Preset"
+    original.new_style_copy_name = "{name} clone"
     result = Settings()
     with TemporaryDirectory(dir=Path(__file__).parent) as dir:
         filepath = Path(dir) / "test_settings.json"
@@ -214,6 +219,10 @@ def test_save():
         and result.animation_layer_name_format == "Anim::{prompt}"
         and result.animation_import_layer_name_format == "Batch::{start}-{end}:{prompt}"
         and result.live_recording_layer_name_format == "Rec::{start}-{end}:{prompt}"
+        and result.new_region_name == "Area {index}"
+        and result.new_region_layer_name == "Base paint"
+        and result.new_style_name == "Preset"
+        and result.new_style_copy_name == "{name} clone"
     )
 
 
@@ -346,6 +355,29 @@ def test_duplicate_style(tmp_path_factory):
 
     copy.loras[0] = {"name": "lora2", "strength": 2.0}
     assert copy.loras != original.loras
+
+
+def test_style_create_uses_configured_names(tmp_path_factory):
+    values = {
+        "new_style_name": settings.new_style_name,
+        "new_style_copy_name": settings.new_style_copy_name,
+    }
+    try:
+        settings.new_style_name = "Template"
+        settings.new_style_copy_name = "Copy of {name}"
+
+        styles = Styles(tmp_path_factory.mktemp("builtin"), tmp_path_factory.mktemp("user"))
+        original = styles.create("original.json")
+        original.name = "Original"
+
+        created = styles.create("new.json")
+        copied = styles.create(original.filename, copy_from=original)
+
+        assert created.name == "Template"
+        assert copied.name == "Copy of Original"
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
 
 
 def test_style_create_applies_style_defaults(tmp_path_factory):
@@ -653,25 +685,56 @@ def _create_model():
 
 
 class _FakeLayer:
-    def __init__(self, layer_type=LayerType.paint):
+    def __init__(self, name="Layer", layer_type=LayerType.paint, parent=None, is_root=False):
         self.id = QUuid.createUuid()
+        self.name = name
         self.type = layer_type
-        self.parent_layer = None
+        self.parent_layer = parent
+        self.is_root = is_root
+        self.child_layers = []
+
+        if parent is not None:
+            parent.child_layers.append(self)
+
+    @property
+    def siblings(self):
+        if self.parent_layer is None:
+            return [], []
+        siblings = self.parent_layer.child_layers
+        index = siblings.index(self)
+        return siblings[:index], siblings[index + 1 :]
 
 
 class _FakeLayerStore(QObject):
     removed = pyqtSignal(object)
+    active_changed = pyqtSignal()
+    parent_changed = pyqtSignal(object)
 
     def __init__(self, layer: _FakeLayer):
         super().__init__()
+        self.root = _FakeLayer("Root", LayerType.group, is_root=True)
+        layer.parent_layer = self.root
+        self.root.child_layers.append(layer)
         self.active = layer
-        self.images = [layer]
+        self.images = [self.root, layer]
 
     def updated(self):
         return self
 
     def find(self, layer_id: QUuid):
         return next((layer for layer in self.images if layer.id == layer_id), None)
+
+    def create(self, name: str, parent=None):
+        layer = _FakeLayer(name, LayerType.paint, parent or self.root)
+        self.images.append(layer)
+        self.active = layer
+        return layer
+
+    def create_group(self, name: str):
+        layer = _FakeLayer(name, LayerType.group, self.root)
+        self.images.append(layer)
+        self.active = layer
+        return layer
 
 
 class _FakeJobs(QObject):
@@ -688,6 +751,29 @@ class _FakeModel(QObject):
         self.arch = arch
         self.layers = _FakeLayerStore(layer)
         self.jobs = _FakeJobs()
+        self.style = Style(Path("style.json"))
+
+
+def test_root_region_uses_configured_names_for_new_regions():
+    values = {
+        "new_region_name": settings.new_region_name,
+        "new_region_layer_name": settings.new_region_layer_name,
+    }
+    try:
+        settings.new_region_name = "Area {index}"
+        settings.new_region_layer_name = "Base paint"
+
+        root_region = RootRegion(_FakeModel())
+        root_region.emplace().link(root_region.layers.active)
+        group_region = root_region.create_region(group=True)
+        layer_region = root_region.create_region(group=False)
+
+        assert group_region.first_layer.name == "Area 1"
+        assert group_region.first_layer.child_layers[0].name == "Base paint"
+        assert layer_region.first_layer.name == "Area 2"
+    finally:
+        for name, value in values.items():
+            setattr(settings, name, value)
 
 
 def _patch_root_connection(monkeypatch):

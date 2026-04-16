@@ -842,6 +842,10 @@ class InterfaceSettings(SettingsTab):
         )
         self.add("show_steps", SwitchSetting(S._show_steps, parent=self))
         self.add("recent_styles_count", SpinBoxSetting(S._recent_styles_count, self, 0, 10))
+        self.add("new_region_name", TextSetting(S._new_region_name, parent=self))
+        self.add("new_region_layer_name", TextSetting(S._new_region_layer_name, parent=self))
+        self.add("new_style_name", TextSetting(S._new_style_name, parent=self))
+        self.add("new_style_copy_name", TextSetting(S._new_style_copy_name, parent=self))
 
         self.add("tag_files", FileListSetting(S._tag_files, files=self._tag_files(), parent=self))
         self._layout.addWidget(self._widgets["tag_files"].list_widget)
