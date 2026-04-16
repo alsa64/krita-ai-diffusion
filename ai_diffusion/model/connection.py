@@ -86,7 +86,7 @@ class Connection(QObject, ObservableProperties):
             self.state = ConnectionState.auth_error
 
     def sign_in(self):
-        eventloop.run(self._sign_in(CloudClient.default_api_url))
+        eventloop.run(self._sign_in(settings.cloud_api_url))
 
     async def _connect(self, client: Client):
         if self.state is ConnectionState.connecting:
@@ -136,7 +136,7 @@ class Connection(QObject, ObservableProperties):
                 if settings.access_token == "":
                     self.state = ConnectionState.auth_missing
                     return None
-                return CloudClient(CloudClient.default_api_url, settings.access_token)
+                return CloudClient(settings.cloud_api_url, settings.access_token)
             case ServerMode.external | ServerMode.managed:
                 return ComfyClient(settings.server_url, settings.access_token)
             case _:

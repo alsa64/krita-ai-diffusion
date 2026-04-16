@@ -138,3 +138,23 @@ async def test_auto_update_uses_configured_check_timeout(monkeypatch):
 
     assert calls == [("https://example.com/plugin/latest?version=1.50.6", 42, None)]
     assert updater.state is UpdateState.latest
+
+
+@pytest.mark.asyncio
+async def test_auto_update_defaults_to_configured_cloud_api_url(monkeypatch):
+    calls = []
+
+    async def fake_get(url, timeout=None, bearer=None):
+        calls.append((url, timeout, bearer))
+        return {"version": "1.50.6"}
+
+    monkeypatch.setattr(settings, "cloud_api_url", "https://api.example.test")
+    monkeypatch.setattr(settings, "auto_update_check_timeout", 42)
+
+    updater = AutoUpdate(current_version="1.50.6")
+    updater._request_manager = SimpleNamespace(get=fake_get)
+
+    await updater.check()
+
+    assert calls == [("https://api.example.test/plugin/latest?version=1.50.6", 42, None)]
+    assert updater.state is UpdateState.latest

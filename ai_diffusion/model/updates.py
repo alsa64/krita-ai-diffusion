@@ -1,5 +1,4 @@
 import hashlib
-import os
 import shutil
 from enum import Enum
 from pathlib import Path
@@ -35,8 +34,6 @@ class UpdatePackage(NamedTuple):
 
 
 class AutoUpdate(QObject, ObservableProperties):
-    default_api_url = os.getenv("INTERSTICE_URL", "https://api.interstice.cloud")
-
     state = Property(UpdateState.unknown)
     latest_version = Property("")
     error = Property("")
@@ -54,7 +51,7 @@ class AutoUpdate(QObject, ObservableProperties):
         super().__init__()
         self.plugin_dir = plugin_dir or Path(__file__).parent.parent.parent
         self.current_version = current_version or __version__
-        self.api_url = api_url or self.default_api_url
+        self.api_url = api_url or settings.cloud_api_url
         self._package: UpdatePackage | None = None
         self._temp_dir: TemporaryDirectory | None = None
         self._request_manager: RequestManager | None = None

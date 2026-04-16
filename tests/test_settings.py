@@ -151,6 +151,8 @@ def test_save():
     original.cloud_sign_in_timeout = 360
     original.cloud_auth_poll_interval = 3.5
     original.cloud_job_poll_interval = 0.8
+    original.cloud_api_url = "https://api.example.test"
+    original.cloud_web_url = "https://app.example.test"
     original.auto_update_check_timeout = 12
     original.flux_inpaint_cfg_scale = 27.5
     original.preview_layer_name_format = "Preview::{prompt}"
@@ -210,6 +212,8 @@ def test_save():
         and result.cloud_sign_in_timeout == 360
         and result.cloud_auth_poll_interval == 3.5
         and result.cloud_job_poll_interval == 0.8
+        and result.cloud_api_url == "https://api.example.test"
+        and result.cloud_web_url == "https://app.example.test"
         and result.auto_update_check_timeout == 12
         and result.flux_inpaint_cfg_scale == 27.5
         and result.preview_layer_name_format == "Preview::{prompt}"
