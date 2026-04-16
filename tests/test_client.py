@@ -21,10 +21,11 @@ from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_
 from ai_diffusion.backend.network import NetworkError
 from ai_diffusion.backend.resources import ControlMode, ResourceKind, UpscalerName, resource_id
 from ai_diffusion.backend.server import Server, ServerBackend, ServerState
+from ai_diffusion.model.connection import Connection
 from ai_diffusion.files import File, FileFormat, FileLibrary
 from ai_diffusion.image import Extent
 from ai_diffusion.platform_tools import get_cuda_devices
-from ai_diffusion.settings import settings
+from ai_diffusion.settings import ServerMode, settings
 from ai_diffusion.style import Arch, Style
 from ai_diffusion.util import ensure
 
@@ -274,14 +275,63 @@ async def test_cloud_sign_in_uses_configured_timeout_and_poll_interval(monkeypat
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
     monkeypatch.setattr(settings, "cloud_sign_in_timeout", 123)
     monkeypatch.setattr(settings, "cloud_auth_poll_interval", 4.5)
+    monkeypatch.setattr(settings, "cloud_web_url", "https://cloud.example.test")
 
     values = []
     async for value in client.sign_in():
         values.append(value)
 
-    assert values == [f"{client.default_web_url}/auth", "token-123"]
+    assert values == ["https://cloud.example.test/auth", "token-123"]
     assert sleeps == [4.5]
     assert [op for op, _ in calls] == ["auth/initiate", "auth/confirm", "auth/confirm"]
+
+
+@pytest.mark.asyncio
+async def test_connection_sign_in_uses_configured_cloud_api_url(monkeypatch):
+    connection = Connection()
+    scheduled = []
+    sign_in_calls = []
+
+    async def fake_sign_in(self, url):
+        sign_in_calls.append(url)
+
+    def fake_run(future):
+        scheduled.append(future)
+        return future
+
+    monkeypatch.setattr(settings, "cloud_api_url", "https://api.example.test")
+    monkeypatch.setattr(Connection, "_sign_in", fake_sign_in)
+    monkeypatch.setattr(eventloop, "run", fake_run)
+
+    connection.sign_in()
+    assert len(scheduled) == 1
+    await scheduled[0]
+
+    assert sign_in_calls == ["https://api.example.test"]
+
+
+@pytest.mark.asyncio
+async def test_connection_connect_uses_configured_cloud_api_url(monkeypatch):
+    connection = Connection()
+    connect_calls = []
+
+    async def fake_connect(url, access_token=""):
+        connect_calls.append((url, access_token))
+        return type(
+            "Client", (), {"device_info": type("Device", (), {"type": "cloud", "vram": 24})()}
+        )()
+
+    monkeypatch.setattr(settings, "cloud_api_url", "https://api.example.test")
+    monkeypatch.setattr(CloudClient, "connect", staticmethod(fake_connect))
+    connection._task = object()
+
+    await connection._connect(
+        "ignored",
+        ServerMode.cloud,
+        "token-123",
+    )
+
+    assert connect_calls == [("https://api.example.test", "token-123")]
 
 
 @pytest.mark.asyncio

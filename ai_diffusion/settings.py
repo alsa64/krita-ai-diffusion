@@ -163,6 +163,8 @@ class Setting:
 
 class Settings(QObject):
     default_path = user_data_dir / "settings.json"
+    default_cloud_api_url = os.getenv("INTERSTICE_URL", "https://api.interstice.cloud")
+    default_cloud_web_url = os.getenv("INTERSTICE_WEB_URL", "https://www.interstice.cloud")
 
     language: str
     _language = Setting(
@@ -768,6 +770,20 @@ class Settings(QObject):
         _("Cloud Job Poll Interval"),
         0.5,
         _("Delay in seconds between cloud job status checks."),
+    )
+
+    cloud_api_url: str
+    _cloud_api_url = Setting(
+        _("Cloud API URL"),
+        default_cloud_api_url,
+        _("Base URL for the cloud API used for sign-in, authentication, and updates."),
+    )
+
+    cloud_web_url: str
+    _cloud_web_url = Setting(
+        _("Cloud Web URL"),
+        default_cloud_web_url,
+        _("Base URL for the cloud website used for sign-in and account links."),
     )
 
     auto_update_check_timeout: int

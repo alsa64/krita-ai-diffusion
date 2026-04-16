@@ -120,7 +120,7 @@ class InitialSetupWidget(QWidget):
             _("Option {number}", number=1) + ": " + _("Online Service"),
             _(
                 "Generate images via {link}. Create an account to get started. No local installation or powerful hardware needed.",
-                link="<a href='https://www.interstice.cloud'>interstice.cloud</a>",
+                link=f"<a href='{settings.cloud_web_url}'>interstice.cloud</a>",
             ),
             _("Login or Sign up"),
             ServerMode.cloud,
@@ -235,10 +235,10 @@ class UserWidget(QFrame):
         self._tokens_remaining.setText(str(user.credits))
 
     def _view_account(self):
-        QDesktopServices.openUrl(QUrl(CloudClient.default_web_url + "/user"))
+        QDesktopServices.openUrl(QUrl(f"{settings.cloud_web_url}/user"))
 
     def _buy_tokens(self, amount: str):
-        QDesktopServices.openUrl(QUrl(f"{CloudClient.default_web_url}/checkout/tokens{amount}"))
+        QDesktopServices.openUrl(QUrl(f"{settings.cloud_web_url}/checkout/tokens{amount}"))
 
     def _logout(self):
         eventloop.run(self._disconnect_and_logout())
@@ -258,7 +258,7 @@ class CloudWidget(QWidget):
         layout.setContentsMargins(0, 12, 4, 4)
         self.setLayout(layout)
 
-        service_url = CloudClient.default_web_url
+        service_url = settings.cloud_web_url
         service_url_text = (
             service_url.removeprefix("https://").removeprefix("www.").removesuffix("/")
         )

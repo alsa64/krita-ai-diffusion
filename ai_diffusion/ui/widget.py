@@ -1201,7 +1201,7 @@ class ErrorBox(QFrame):
             clipboard.setText(self._original_error)
 
     def _recharge(self):
-        QDesktopServices.openUrl(QUrl("https://www.interstice.cloud/user"))
+        QDesktopServices.openUrl(QUrl(f"{settings.cloud_web_url}/user"))
 
 
 def create_wide_tool_button(icon_name: str, text: str, parent=None):

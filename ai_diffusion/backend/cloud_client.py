@@ -1,7 +1,6 @@
 import asyncio
 import json
 import math
-import os
 import platform
 import uuid
 from base64 import b64encode
@@ -79,9 +78,6 @@ class JobExecutor:
 
 
 class CloudClient(Client):
-    default_api_url = os.getenv("INTERSTICE_URL", "https://api.interstice.cloud")
-    default_web_url = os.getenv("INTERSTICE_WEB_URL", "https://www.interstice.cloud")
-
     def __init__(self, url: str, access_token: str = ""):
         self.url = url
         self.models = ClientModels()
@@ -110,7 +106,7 @@ class CloudClient(Client):
         log.info(f"Sending authorization request for {info} to {self.url}")
         init = await self._post("auth/initiate", {"client_id": client_id, "client_info": info})
 
-        sign_in_url = f"{self.default_web_url}{init['url']}"
+        sign_in_url = f"{settings.cloud_web_url}{init['url']}"
         log.info(f"Waiting for completion of authorization at {sign_in_url}")
         yield sign_in_url
 
@@ -435,10 +431,10 @@ class CloudClient(Client):
         if e.status == 402 and e.data and self.user:  # 402 Payment Required
             try:
                 data = copy(e.data)
-                data["url"] = f"{self.default_web_url}/user"
+                data["url"] = f"{settings.cloud_web_url}/user"
                 self.user.credits = e.data["credits"]
                 return ClientMessage(
-                    ClientEvent.payment_required, job_id, result=e.data, error=e.message
+                    ClientEvent.payment_required, job_id, result=data, error=e.message
                 )
             except Exception:
                 log.warning(f"Could not parse 402 error: {e.data}")
