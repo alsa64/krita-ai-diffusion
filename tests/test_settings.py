@@ -12,16 +12,24 @@ class _Krita:
     def instance():
         return _Krita()
 
+    def activeDocument(self):
+        return None
+
 
 krita.Krita = _Krita
 sys.modules.setdefault("krita", krita)
 
 from ai_diffusion.api import InpaintMode
+from ai_diffusion.connection import Connection
+from ai_diffusion.custom_workflow import WorkflowCollection
 from ai_diffusion.defaults import defaults
-from ai_diffusion.model import Workspace
+from ai_diffusion.document import Document
+from ai_diffusion.model import Model, Workspace
 from ai_diffusion.persistence import (
     RecentlyUsedSync,
+    load_document_defaults,
     load_workspace_defaults,
+    save_document_defaults,
     save_workspace_defaults,
 )
 from ai_diffusion.settings import PerformancePreset, ServerMode, Setting, Settings, settings
@@ -238,14 +246,40 @@ def test_workspace_defaults_roundtrip(tmp_path):
     try:
         save_workspace_defaults(
             Workspace.generation,
-            {"batch_count": 3, "inpaint_mode": InpaintMode.custom.name},
+            {
+                "strength": 0.6,
+                "batch_count": 3,
+                "resolution_multiplier": 2.0,
+                "use_smart_resolution": False,
+                "smart_rotate": True,
+                "layer_count": 6,
+                "inpaint_mode": InpaintMode.custom.name,
+            },
         )
 
         values = load_workspace_defaults(Workspace.generation)
 
+        assert values["strength"] == 0.6
         assert values["batch_count"] == 3
+        assert values["resolution_multiplier"] == 2.0
+        assert values["use_smart_resolution"] is False
+        assert values["smart_rotate"] is True
+        assert values["layer_count"] == 6
         assert values["inpaint_mode"] is InpaintMode.custom
         assert values["translation_enabled"] is True
+    finally:
+        defaults._path = original_path
+
+
+def test_document_defaults_roundtrip(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_document_defaults({"workspace": Workspace.upscaling.name})
+
+        values = load_document_defaults()
+
+        assert values["workspace"] is Workspace.upscaling
     finally:
         defaults._path = original_path
 
@@ -256,19 +290,95 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
     defaults._path = tmp_path / "defaults.json"
     try:
         settings.document_defaults = {
+            "workspace": Workspace.live.name,
             "style": "preset.json",
+            "strength": 0.4,
             "batch_count": 5,
+            "resolution_multiplier": 2.3,
+            "use_smart_resolution": False,
+            "smart_rotate": True,
+            "layer_count": 8,
             "inpaint_mode": InpaintMode.custom.name,
         }
 
         RecentlyUsedSync.from_settings()
+        document = load_document_defaults()
         values = load_workspace_defaults(Workspace.generation)
 
+        assert document["workspace"] is Workspace.live
         assert values["style"] == "preset.json"
+        assert values["strength"] == 0.4
         assert values["batch_count"] == 5
+        assert values["resolution_multiplier"] == 2.3
+        assert values["use_smart_resolution"] is False
+        assert values["smart_rotate"] is True
+        assert values["layer_count"] == 8
         assert values["inpaint_mode"] is InpaintMode.custom
     finally:
         settings.document_defaults = previous_document_defaults
+        defaults._path = original_path
+
+
+def _create_model():
+    connection = Connection()
+    workflows = WorkflowCollection(connection)
+    return Model(Document(), connection, workflows)
+
+
+def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        save_document_defaults({"workspace": Workspace.animation.name})
+        save_workspace_defaults(
+            Workspace.generation,
+            {
+                "strength": 0.55,
+                "resolution_multiplier": 2.4,
+                "use_smart_resolution": False,
+                "smart_rotate": True,
+                "layer_count": 7,
+            },
+        )
+
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        assert model.workspace is Workspace.animation
+        assert model.strength == 0.55
+        assert model.resolution_multiplier == 2.4
+        assert model.use_smart_resolution is False
+        assert model.smart_rotate is True
+        assert model.layer_count == 7
+    finally:
+        defaults._path = original_path
+
+
+def test_recently_used_sync_tracks_workspace_and_generation_defaults(tmp_path):
+    original_path = defaults.path
+    defaults._path = tmp_path / "defaults.json"
+    try:
+        recent = RecentlyUsedSync.from_settings()
+        model = _create_model()
+        recent.track(model)
+
+        model.workspace = Workspace.live
+        model.strength = 0.65
+        model.resolution_multiplier = 1.8
+        model.use_smart_resolution = False
+        model.smart_rotate = True
+        model.layer_count = 5
+
+        assert load_document_defaults()["workspace"] is Workspace.live
+
+        values = load_workspace_defaults(Workspace.generation)
+        assert values["strength"] == 0.65
+        assert values["resolution_multiplier"] == 1.8
+        assert values["use_smart_resolution"] is False
+        assert values["smart_rotate"] is True
+        assert values["layer_count"] == 5
+    finally:
         defaults._path = original_path
 
 

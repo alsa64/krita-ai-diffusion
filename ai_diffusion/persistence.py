@@ -30,10 +30,19 @@ from .util import encode_json
 # Version of the persistence format, increment when there are breaking changes
 version = 1
 
+document_defaults_schema = {
+    "workspace": Setting(_("Open Workspace"), Workspace.generation),
+}
+
 generation_defaults_schema = {
     "style": Setting(_("Style Preset"), "", _("Style selected for new documents.")),
+    "strength": Setting(_("Strength"), 1.0),
     "batch_count": Setting(_("Batch Count"), 1),
+    "resolution_multiplier": Setting(_("Resolution"), 1.5),
+    "use_smart_resolution": Setting(_("Smart Resolution"), True),
+    "smart_rotate": Setting(_("Smart Rotate"), False),
     "translation_enabled": Setting(_("Prompt Translation"), True),
+    "layer_count": Setting(_("Layer Count"), 4),
     "inpaint_mode": Setting(_("Inpaint Mode"), InpaintMode.automatic),
     "inpaint_fill": Setting(_("Inpaint Fill"), FillMode.neutral),
     "inpaint_use_model": Setting(_("Use Inpaint Model"), True),
@@ -67,6 +76,14 @@ workspace_defaults_schema = {
 }
 
 
+def load_document_defaults():
+    return defaults.read_section("document", document_defaults_schema)
+
+
+def save_document_defaults(values: dict[str, Any]):
+    defaults.write_section("document", values, document_defaults_schema)
+
+
 def load_workspace_defaults(workspace: Workspace):
     return defaults.read_section(
         ("workspaces", workspace.name), workspace_defaults_schema[workspace]
@@ -94,14 +111,21 @@ class RecentlyUsedSync:
     def track(self, model: DocumentModel):
         try:
             if _find_annotation(model.document, "ui.json") is None:
+                document = load_document_defaults()
                 generation = load_workspace_defaults(Workspace.generation)
                 upscaling = load_workspace_defaults(Workspace.upscaling)
                 live = load_workspace_defaults(Workspace.live)
                 animation = load_workspace_defaults(Workspace.animation)
 
+                model.workspace = document["workspace"]
                 model.style = Styles.list().find(generation["style"]) or Styles.list().default
+                model.strength = generation["strength"]
                 model.batch_count = generation["batch_count"]
+                model.resolution_multiplier = generation["resolution_multiplier"]
+                model.use_smart_resolution = generation["use_smart_resolution"]
+                model.smart_rotate = generation["smart_rotate"]
                 model.translation_enabled = generation["translation_enabled"]
+                model.layer_count = generation["layer_count"]
                 model.inpaint.mode = generation["inpaint_mode"]
                 model.inpaint.fill = generation["inpaint_fill"]
                 model.inpaint.use_inpaint = generation["inpaint_use_model"]
@@ -123,11 +147,21 @@ class RecentlyUsedSync:
         except Exception as e:
             log.warning(f"Failed to apply default settings to new document: {type(e)} {e}")
 
+        model.workspace_changed.connect(self._set_document_default("workspace"))
         model.style_changed.connect(self._set(Workspace.generation, "style"))
+        model.strength_changed.connect(self._set(Workspace.generation, "strength"))
         model.batch_count_changed.connect(self._set(Workspace.generation, "batch_count"))
+        model.resolution_multiplier_changed.connect(
+            self._set(Workspace.generation, "resolution_multiplier")
+        )
+        model.use_smart_resolution_changed.connect(
+            self._set(Workspace.generation, "use_smart_resolution")
+        )
+        model.smart_rotate_changed.connect(self._set(Workspace.generation, "smart_rotate"))
         model.translation_enabled_changed.connect(
             self._set(Workspace.generation, "translation_enabled")
         )
+        model.layer_count_changed.connect(self._set(Workspace.generation, "layer_count"))
         model.inpaint.mode_changed.connect(self._set(Workspace.generation, "inpaint_mode"))
         model.inpaint.fill_changed.connect(self._set(Workspace.generation, "inpaint_fill"))
         model.inpaint.use_inpaint_changed.connect(
@@ -166,22 +200,43 @@ class RecentlyUsedSync:
 
         return setter
 
+    def _set_document_default(self, key: str):
+        def setter(value):
+            if isinstance(value, Enum):
+                value = value.name
+            values = load_document_defaults()
+            values[key] = value
+            save_document_defaults(values)
+
+        return setter
+
     def _migrate_legacy_settings(self):
         has_workspace_defaults = any(
             defaults.read_section(("workspaces", workspace.name), schema)
             != {key: setting.default for key, setting in schema.items()}
             for workspace, schema in workspace_defaults_schema.items()
         )
-        if has_workspace_defaults or not settings.document_defaults:
+        has_document_defaults = load_document_defaults() != {
+            key: setting.default for key, setting in document_defaults_schema.items()
+        }
+        if (has_workspace_defaults or has_document_defaults) or not settings.document_defaults:
             return
 
         legacy = settings.document_defaults
+        save_document_defaults({
+            "workspace": legacy.get("workspace", Workspace.generation.name),
+        })
         save_workspace_defaults(
             Workspace.generation,
             {
                 "style": legacy.get("style", ""),
+                "strength": legacy.get("strength", 1.0),
                 "batch_count": legacy.get("batch_count", 1),
+                "resolution_multiplier": legacy.get("resolution_multiplier", 1.5),
+                "use_smart_resolution": legacy.get("use_smart_resolution", True),
+                "smart_rotate": legacy.get("smart_rotate", False),
                 "translation_enabled": legacy.get("translation_enabled", True),
+                "layer_count": legacy.get("layer_count", 4),
                 "inpaint_mode": legacy.get("inpaint_mode", InpaintMode.automatic.name),
                 "inpaint_fill": legacy.get("inpaint_fill", FillMode.neutral.name),
                 "inpaint_use_model": legacy.get("inpaint_use_model", True),

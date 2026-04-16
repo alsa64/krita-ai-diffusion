@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from krita import Krita
 from PyQt5.QtCore import QMetaObject, QSize, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import (
@@ -49,9 +51,12 @@ from ..model.root import collect_diagnostics, root
 from ..model.updates import UpdateState
 from ..persistence import (
     animation_defaults_schema,
+    document_defaults_schema,
     generation_defaults_schema,
     live_defaults_schema,
+    load_document_defaults,
     load_workspace_defaults,
+    save_document_defaults,
     save_workspace_defaults,
     upscaling_defaults_schema,
 )
@@ -884,6 +889,26 @@ class WorkspaceDefaultsPage(SettingsTab):
             self._write()
 
 
+class DocumentDefaultsPage(SettingsTab):
+    def __init__(self):
+        super().__init__(_("General"))
+
+    def read(self):
+        with self._write_guard:
+            values = load_document_defaults()
+            for name, widget in self._widgets.items():
+                widget.value = values[name]
+            self._read()
+
+    def write(self, *ignored):
+        if not self._write_guard:
+            values = {
+                name: widget.value for name, widget in self._widgets.items() if widget.enabled
+            }
+            save_document_defaults(values)
+            self._write()
+
+
 class WorkspaceDefaultsSettings(SettingsTab):
     def __init__(self):
         super().__init__(_("Workspace Defaults"))
@@ -892,16 +917,53 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self._layout.addWidget(tabs)
         self._layout.addStretch()
 
+        self.document = DocumentDefaultsPage()
+        self.document.add(
+            "workspace",
+            ComboBoxSetting(
+                document_defaults_schema["workspace"],
+                parent=self,
+            ),
+        )
+        cast(ComboBoxSetting, self.document._widgets["workspace"]).set_items([
+            (_("Generate"), Workspace.generation),
+            (_("Upscale"), Workspace.upscaling),
+            (_("Live"), Workspace.live),
+            (_("Animation"), Workspace.animation),
+            (_("Custom"), Workspace.custom),
+        ])
+
         self.generation = WorkspaceDefaultsPage(_("Generation"), Workspace.generation)
         self.generation.add(
             "style", ComboBoxSetting(generation_defaults_schema["style"], parent=self)
         )
         self.generation.add(
+            "strength", SliderSetting(generation_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+        )
+        self.generation.add(
             "batch_count", SpinBoxSetting(generation_defaults_schema["batch_count"], self, 1, 16)
+        )
+        self.generation.add(
+            "resolution_multiplier",
+            SliderSetting(
+                generation_defaults_schema["resolution_multiplier"], self, 0.1, 4.0, "{:.1f}x"
+            ),
+        )
+        self.generation.add(
+            "use_smart_resolution",
+            SwitchSetting(generation_defaults_schema["use_smart_resolution"], parent=self),
+        )
+        self.generation.add(
+            "smart_rotate",
+            SwitchSetting(generation_defaults_schema["smart_rotate"], parent=self),
         )
         self.generation.add(
             "translation_enabled",
             SwitchSetting(generation_defaults_schema["translation_enabled"], parent=self),
+        )
+        self.generation.add(
+            "layer_count",
+            SpinBoxSetting(generation_defaults_schema["layer_count"], self, 1, 16),
         )
         self.generation.add(
             "inpaint_mode", ComboBoxSetting(generation_defaults_schema["inpaint_mode"], parent=self)
@@ -960,6 +1022,7 @@ class WorkspaceDefaultsSettings(SettingsTab):
             SwitchSetting(animation_defaults_schema["batch_mode"], parent=self),
         )
 
+        tabs.addTab(self.document, _("General"))
         tabs.addTab(self.generation, _("Generation"))
         tabs.addTab(self.upscaling, _("Upscaling"))
         tabs.addTab(self.live, _("Live"))
@@ -974,12 +1037,14 @@ class WorkspaceDefaultsSettings(SettingsTab):
     def read(self):
         self._update_styles()
         self._update_upscalers()
+        self.document.read()
         self.generation.read()
         self.upscaling.read()
         self.live.read()
         self.animation.read()
 
     def restore_defaults(self):
+        defaults.clear_section("document")
         defaults.clear_section("workspaces")
         self.read()
 
