@@ -579,6 +579,290 @@ class SamplerWidget(QWidget):
         setattr(style, f"{self.prefix}cfg_scale", self._cfg.value)
 
 
+class StyleSettingsEditor(QWidget):
+    value_changed = pyqtSignal()
+
+    _checkpoint_advanced_widgets: list[SettingWidget]
+
+    def __init__(self, server: Server, include_name=True, parent=None):
+        super().__init__(parent)
+        self.server = server
+        self._style: Style | None = None
+        self._write_guard = SettingsWriteGuard()
+        self._style_widgets: dict[str, SettingWidget] = {}
+
+        self._layout = QVBoxLayout()
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(self._layout)
+
+        def add(name: str, widget: SettingWidget):
+            self._style_widgets[name] = widget
+            self._layout.addWidget(widget)
+            widget.value_changed.connect(self.write)
+            return widget
+
+        if include_name:
+            add("name", TextSetting(StyleSettings.name, self))
+
+        checkpoints = FileFilter(root.files.checkpoints)
+        checkpoints.available_only = True
+        self._checkpoint_select = ComboBoxSetting(
+            StyleSettings.checkpoints, model=checkpoints, parent=self
+        )
+        self._checkpoint_select.value_changed.connect(self.write)
+        self._checkpoint_select.add_button(
+            Krita.instance().icon("reload-preset"),
+            _("Look for new checkpoint files"),
+            root.connection.refresh,
+        )
+        self._layout.addWidget(self._checkpoint_select)
+
+        self._checkpoint_warning = QLabel(self)
+        self._checkpoint_warning.setStyleSheet(f"font-style: italic; color: {theme.yellow};")
+        self._checkpoint_warning.setVisible(False)
+        self._layout.addWidget(self._checkpoint_warning, alignment=Qt.AlignmentFlag.AlignRight)
+
+        checkpoint_advanced = ExpanderButton(_("Checkpoint configuration (advanced)"), self)
+        checkpoint_advanced.toggled.connect(self._toggle_checkpoint_advanced)
+        self._layout.addWidget(checkpoint_advanced)
+
+        self._arch_select: ComboBoxSetting = add(
+            "architecture", ComboBoxSetting(StyleSettings.architecture, parent=self)
+        )
+        self._vae = add("vae", ComboBoxSetting(StyleSettings.vae, parent=self))
+
+        self._clip_skip = add("clip_skip", SpinBoxSetting(StyleSettings.clip_skip, self, 0, 12))
+        self._clip_skip_check = self._clip_skip.add_checkbox(_("Override"))
+        self._clip_skip_check.toggled.connect(self._toggle_clip_skip)
+
+        self._resolution_spin = add(
+            "preferred_resolution",
+            SpinBoxSetting(StyleSettings.preferred_resolution, self, 0, 2048, step=8),
+        )
+        resolution_check = self._resolution_spin.add_checkbox(_("Override"))
+        resolution_check.toggled.connect(self._toggle_preferred_resolution)
+
+        self._zsnr = add(
+            "v_prediction_zsnr", SwitchSetting(StyleSettings.v_prediction_zsnr, parent=self)
+        )
+
+        self._sag = add(
+            "self_attention_guidance",
+            SwitchSetting(StyleSettings.self_attention_guidance, parent=self),
+        )
+
+        self._checkpoint_advanced_widgets = [
+            self._arch_select,
+            self._vae,
+            self._clip_skip,
+            self._resolution_spin,
+            self._zsnr,
+            self._sag,
+        ]
+        for widget in self._checkpoint_advanced_widgets:
+            widget.indent = 1
+        self._toggle_checkpoint_advanced(False)
+
+        add("loras", LoraList(StyleSettings.loras, self))
+        add("style_prompt", LineEditSetting(StyleSettings.style_prompt, self))
+        add("negative_prompt", LineEditSetting(StyleSettings.negative_prompt, self))
+
+        self._edit_style = add(
+            "linked_edit_style", ComboBoxSetting(StyleSettings.linked_edit_style, parent=self)
+        )
+
+        sdesc = _("Configure sampler type, steps and CFG to tweak the quality of generated images.")
+        add_header(self._layout, Setting(_("Sampler Settings"), "", sdesc))
+
+        self._default_sampler = SamplerWidget("", _("Quality Preset (generate and upscale)"), self)
+        self._default_sampler.value_changed.connect(self.write)
+        self._layout.addWidget(self._default_sampler)
+
+        self._live_sampler = SamplerWidget("live_", _("Performance Preset (live mode)"), self)
+        self._live_sampler.value_changed.connect(self.write)
+        self._layout.addWidget(self._live_sampler)
+
+        self._layout.addStretch()
+
+        if settings.server_mode is ServerMode.managed:
+            self._checkpoint_select.add_button(
+                Krita.instance().icon("document-open"),
+                _("Open the folder where checkpoints are stored"),
+                self._open_checkpoints_folder,
+            )
+        if self._style_widgets["loras"].open_folder_button:
+            self._style_widgets["loras"].open_folder_button.clicked.connect(self._open_lora_folder)
+
+    @property
+    def style(self):
+        return self._style
+
+    def update_model_lists(self):
+        self._read()
+
+    def read(self, style: Style):
+        self._style = style
+        with self._write_guard:
+            for name, widget in self._style_widgets.items():
+                widget.value = getattr(style, name)
+            self._default_sampler.read(style)
+            self._live_sampler.read(style)
+        self._read_checkpoint(style)
+        self._enable_checkpoint_advanced(style)
+        self._resolution_spin.enabled = style.preferred_resolution > 0
+
+    def write(self, *ignored):
+        style = self._style
+        if style is None or self._write_guard:
+            return
+        for name, widget in self._style_widgets.items():
+            if widget.value is not None:
+                setattr(style, name, widget.value)
+        self._write_checkpoint(style)
+        self._default_sampler.write(style)
+        self._live_sampler.write(style)
+        self._enable_checkpoint_advanced(style)
+        self.value_changed.emit()
+
+    def _read(self):
+        if client := root.connection.client_if_connected:
+            default_vae = cast(str, StyleSettings.vae.default)
+            self._style_widgets["vae"].set_items([default_vae] + client.models.vae)
+        self._setup_edit_style()
+        if self._style is not None:
+            self.read(self._style)
+
+    def _current_style(self):
+        return cast(Style, self._style)
+
+    def _open_checkpoints_folder(self):
+        arch = resolve_arch(self._current_style(), root.connection.client_if_connected)
+        if arch.is_sdxl_like or arch is Arch.sd15:
+            self._open_folder(Path("models/checkpoints"))
+        else:
+            self._open_folder(Path("models/diffusion_models"))
+
+    def _open_lora_folder(self):
+        self._open_folder(Path("models/loras"))
+
+    def _open_folder(self, subfolder: Path):
+        if self.server.comfy_dir is not None:
+            folder = self.server.path / subfolder
+            folder.mkdir(parents=True, exist_ok=True)
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
+    def _set_checkpoint_warning(self):
+        self._checkpoint_warning.setVisible(False)
+        style = self._style
+        if style is None:
+            return
+        if client := root.connection.client_if_connected:
+            warn = []
+            preferred_cp = style.preferred_checkpoint(client.models.checkpoints.keys())
+            file = root.files.checkpoints.find(preferred_cp)
+            if file is None:
+                warn.append(_("The checkpoint used by this style is not installed."))
+
+            arch = resolve_arch(style, client)
+            if file and not client.supports_arch(arch):
+                warn.append(
+                    _(
+                        "This is a {version} checkpoint, but the {version} workload has not been installed.",
+                        version=arch.value,
+                    )
+                )
+
+            if file and file.format is FileFormat.diffusion:
+                vae_id = ResourceId(ResourceKind.vae, arch, "default")
+                if client.models.resources.get(vae_id.string) is None:
+                    paths = search_paths.get(vae_id.string, [])
+                    text = _("The VAE for this diffusion model is not installed")
+                    text += ": " + ", ".join(str(p) for p in paths)
+                    warn.append(text)
+                for te in arch.text_encoders:
+                    te_id = ResourceId(ResourceKind.text_encoder, Arch.all, te)
+                    if client.models.resources.get(te_id.string) is None:
+                        paths = search_paths.get(te_id.string, [])
+                        text = _("The text encoder for this diffusion model is not installed")
+                        text += ": " + ", ".join(str(p) for p in paths)
+                        warn.append(text)
+            if warn:
+                self._checkpoint_warning.setText("\n".join(warn))
+                self._checkpoint_warning.setVisible(True)
+
+    def _show_edit_style(self, style: Style):
+        arch = resolve_arch(style, root.connection.client_if_connected)
+        self._edit_style.visible = not arch.supports_edit
+
+    def _setup_edit_style(self):
+        style = self._style
+        if style is None:
+            return
+        client = root.connection.client_if_connected
+        edit_styles = [(_("None"), "")]
+        edit_styles.extend(
+            (s.name, s.filename)
+            for s in filter_supported_styles(Styles.list(), client)
+            if s != style and resolve_arch(s, client).supports_edit
+        )
+        self._edit_style.set_items(edit_styles)
+
+    def _read_checkpoint(self, style: Style):
+        if client := root.connection.client_if_connected:
+            checkpoint = style.preferred_checkpoint(client.models.checkpoints.keys())
+            self._checkpoint_select.value = checkpoint
+        elif style.checkpoints:
+            self._checkpoint_select.value = style.checkpoints[0]
+        self._set_checkpoint_warning()
+        self._show_edit_style(style)
+
+    def _write_checkpoint(self, style: Style):
+        value = self._checkpoint_select.value
+        if isinstance(value, str) and value != "":
+            style.checkpoints = [value]
+        self._set_checkpoint_warning()
+        self._show_edit_style(style)
+
+    def _toggle_preferred_resolution(self, checked: bool):
+        if checked and self._resolution_spin.value == 0:
+            sd_ver = resolve_arch(self._current_style(), root.connection.client_if_connected)
+            self._resolution_spin.value = 640 if sd_ver is Arch.sd15 else 1024
+        elif not checked and self._resolution_spin.value > 0:
+            self._resolution_spin.value = 0
+
+    def _toggle_clip_skip(self, checked: bool):
+        if checked and self._clip_skip.value == 0:
+            arch = resolve_arch(self._current_style(), root.connection.client_if_connected)
+            self._clip_skip.value = 1 if arch is Arch.sd15 else 2
+        elif not checked and self._clip_skip.value > 0:
+            self._clip_skip.value = 0
+
+    def _toggle_checkpoint_advanced(self, checked: bool):
+        for widget in self._checkpoint_advanced_widgets:
+            widget.visible = checked
+
+    def _enable_checkpoint_advanced(self, style: Style):
+        arch = resolve_arch(style, root.connection.client_if_connected)
+        if arch.is_sdxl_like:
+            valid_archs = (Arch.auto, Arch.sdxl, Arch.illu, Arch.illu_v)
+        elif arch.is_flux_like:
+            valid_archs = (Arch.auto, Arch.flux, Arch.flux_k)
+        elif arch.is_qwen_like:
+            valid_archs = (Arch.auto, Arch.qwen, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l)
+        elif arch.is_flux2:
+            valid_archs = (Arch.auto, Arch.flux2_4b, Arch.flux2_9b)
+        else:
+            valid_archs = (Arch.auto, arch)
+        with SignalBlocker(self._arch_select):
+            self._arch_select.set_items([(e.value, e.name) for e in valid_archs])
+            if style.architecture in valid_archs:
+                self._arch_select.value = style.architecture
+        self._clip_skip_check.setEnabled(arch.supports_clip_skip)
+        self._clip_skip.enabled = arch.supports_clip_skip and style.clip_skip > 0
+        self._zsnr.enabled = arch.supports_attention_guidance
+        self._sag.enabled = arch.supports_attention_guidance
+
+
 class StylePresets(SettingsTab):
     def __init__(self, server: Server):
         super().__init__(_("Style Presets"))
@@ -647,113 +931,10 @@ class StylePresets(SettingsTab):
         frame.setLayout(frame_layout)
         self._layout.addWidget(frame)
 
-        self._style_widgets: dict[str, SettingWidgetBase] = {}
-
-        def add(name: str, widget: SettingWidgetBase | SettingWidget):
-            self._style_widgets[name] = widget
-            self._layout.addWidget(widget)
-            widget.value_changed.connect(self.write)
-            return widget
-
-        add("name", TextSetting(StyleSettings.name, self))
-        self._style_widgets["name"].value_changed.connect(self._update_name)
-
-        checkpoints = FileFilter(root.files.checkpoints)
-        checkpoints.available_only = True
-        self._checkpoint_select = ComboBoxSetting(
-            StyleSettings.checkpoints, model=checkpoints, parent=self
-        )
-        self._checkpoint_select.value_changed.connect(self.write)
-        self._checkpoint_select.add_button(
-            Krita.instance().icon("reload-preset"),
-            _("Look for new checkpoint files"),
-            root.connection.refresh,
-        )
-        self._layout.addWidget(self._checkpoint_select)
-
-        self._checkpoint_warning = QLabel(self)
-        self._checkpoint_warning.setStyleSheet(f"font-style: italic; color: {theme.yellow};")
-        self._checkpoint_warning.setVisible(False)
-        self._layout.addWidget(self._checkpoint_warning, alignment=Qt.AlignmentFlag.AlignRight)
-
-        checkpoint_advanced = ExpanderButton(_("Checkpoint configuration (advanced)"), self)
-        checkpoint_advanced.toggled.connect(self._toggle_checkpoint_advanced)
-        self._layout.addWidget(checkpoint_advanced)
-
-        self._arch_select = add(
-            "architecture", ComboBoxSetting(StyleSettings.architecture, parent=self)
-        )
-        self._vae = add("vae", ComboBoxSetting(StyleSettings.vae, parent=self))
-
-        self._clip_skip = self._style_widgets["clip_skip"] = SpinBoxSetting(
-            StyleSettings.clip_skip, self, 0, 12
-        )
-        self._clip_skip.value_changed.connect(self.write)
-        self._layout.addWidget(self._clip_skip)
-        self._clip_skip_check = self._clip_skip.add_checkbox(_("Override"))
-        self._clip_skip_check.toggled.connect(self._toggle_clip_skip)
-
-        self._resolution_spin = self._style_widgets["preferred_resolution"] = SpinBoxSetting(
-            StyleSettings.preferred_resolution, self, 0, 2048, step=8
-        )
-        self._resolution_spin.value_changed.connect(self.write)
-        self._layout.addWidget(self._resolution_spin)
-        resolution_check = self._resolution_spin.add_checkbox(_("Override"))
-        resolution_check.toggled.connect(self._toggle_preferred_resolution)
-
-        self._zsnr = add(
-            "v_prediction_zsnr", SwitchSetting(StyleSettings.v_prediction_zsnr, parent=self)
-        )
-
-        self._sag = add(
-            "self_attention_guidance",
-            SwitchSetting(StyleSettings.self_attention_guidance, parent=self),
-        )
-
-        self._checkpoint_advanced_widgets = [
-            self._arch_select,
-            self._vae,
-            self._clip_skip,
-            self._resolution_spin,
-            self._zsnr,
-            self._sag,
-        ]
-        for widget in self._checkpoint_advanced_widgets:
-            widget.indent = 1
-        self._toggle_checkpoint_advanced(False)
-
-        self._loras = LoraList(StyleSettings.loras, self)
-        self._layout.addWidget(self._loras)
-        self._loras.value_changed.connect(self.write)
-
-        add("style_prompt", LineEditSetting(StyleSettings.style_prompt, self))
-        add("negative_prompt", LineEditSetting(StyleSettings.negative_prompt, self))
-
-        self._edit_style = add(
-            "linked_edit_style", ComboBoxSetting(StyleSettings.linked_edit_style, parent=self)
-        )
-
-        sdesc = _("Configure sampler type, steps and CFG to tweak the quality of generated images.")
-        add_header(self._layout, Setting(_("Sampler Settings"), "", sdesc))
-
-        self._default_sampler = SamplerWidget("", _("Quality Preset (generate and upscale)"), self)
-        self._default_sampler.value_changed.connect(self.write)
-        self._layout.addWidget(self._default_sampler)
-
-        self._live_sampler = SamplerWidget("live_", _("Performance Preset (live mode)"), self)
-        self._live_sampler.value_changed.connect(self.write)
-        self._layout.addWidget(self._live_sampler)
-
-        self._layout.addStretch()
-
-        if settings.server_mode is ServerMode.managed:
-            self._checkpoint_select.add_button(
-                Krita.instance().icon("document-open"),
-                _("Open the folder where checkpoints are stored"),
-                self._open_checkpoints_folder,
-            )
-        if self._loras.open_folder_button:
-            self._loras.open_folder_button.clicked.connect(self._open_lora_folder)
+        self._editor = StyleSettingsEditor(server, parent=self)
+        self._editor.value_changed.connect(self._save_style)
+        self._editor._style_widgets["name"].value_changed.connect(self._update_name)
+        self._layout.addWidget(self._editor)
 
         self._populate_style_list()
         Styles.list().changed.connect(self._update_style_list)
@@ -768,14 +949,14 @@ class StylePresets(SettingsTab):
         index = self._style_list.findData(style.filename)
         if index >= 0:
             self._style_list.setCurrentIndex(index)
-            self._read_style(style)
+            self._editor.read(style)
+            self._show_builtin_info(style)
 
     def update_model_lists(self):
-        with self._write_guard:
-            self._read()
+        self._editor.update_model_lists()
 
     def _create_style(self):
-        cp = self._checkpoint_select.value
+        cp = self._editor._checkpoint_select.value
         new_style = Styles.list().create(checkpoint=str(cp))
         self.current_style = new_style
 
@@ -813,173 +994,24 @@ class StylePresets(SettingsTab):
         Styles.list().name_changed.emit()
 
     def _change_style(self):
-        self._read_style(self.current_style)
-
-    def _open_checkpoints_folder(self):
-        arch = resolve_arch(self.current_style, root.connection.client_if_connected)
-        if arch.is_sdxl_like or arch is Arch.sd15:
-            self._open_folder(Path("models/checkpoints"))
-        else:
-            self._open_folder(Path("models/diffusion_models"))
-
-    def _open_lora_folder(self):
-        self._open_folder(Path("models/loras"))
-
-    def _open_folder(self, subfolder: Path):
-        if self.server.comfy_dir is not None:
-            folder = self.server.path / subfolder
-            folder.mkdir(parents=True, exist_ok=True)
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-
-    def _set_checkpoint_warning(self):
-        self._checkpoint_warning.setVisible(False)
-        if client := root.connection.client_if_connected:
-            warn = []
-            preferred_cp = self.current_style.preferred_checkpoint(client.models.checkpoints.keys())
-            file = root.files.checkpoints.find(preferred_cp)
-            if file is None:
-                warn.append(_("The checkpoint used by this style is not installed."))
-
-            arch = resolve_arch(self.current_style, client)
-            if file and not client.supports_arch(arch):
-                warn.append(
-                    _(
-                        "This is a {version} checkpoint, but the {version} workload has not been installed.",
-                        version=arch.value,
-                    )
-                )
-
-            if file and file.format is FileFormat.diffusion:
-                vae_id = ResourceId(ResourceKind.vae, arch, "default")
-                if client.models.resources.get(vae_id.string) is None:
-                    paths = search_paths.get(vae_id.string, [])
-                    text = _("The VAE for this diffusion model is not installed")
-                    text += ": " + ", ".join(str(p) for p in paths)
-                    warn.append(text)
-                for te in arch.text_encoders:
-                    te_id = ResourceId(ResourceKind.text_encoder, Arch.all, te)
-                    if client.models.resources.get(te_id.string) is None:
-                        paths = search_paths.get(te_id.string, [])
-                        text = _("The text encoder for this diffusion model is not installed")
-                        text += ": " + ", ".join(str(p) for p in paths)
-                        warn.append(text)
-            if warn:
-                self._checkpoint_warning.setText("\n".join(warn))
-                self._checkpoint_warning.setVisible(True)
-
-    def _show_edit_style(self, style: Style):
-        arch = resolve_arch(style, root.connection.client_if_connected)
-        self._edit_style.visible = not arch.supports_edit
-
-    def _setup_edit_style(self):
-        client = root.connection.client_if_connected
-        edit_styles = [(_("None"), "")]
-        edit_styles.extend(
-            (s.name, s.filename)
-            for s in filter_supported_styles(Styles.list(), client)
-            if s != self.current_style and resolve_arch(s, client).supports_edit
-        )
-        self._edit_style.set_items(edit_styles)
-
-    def _read_checkpoint(self, style: Style):
-        if client := root.connection.client_if_connected:
-            checkpoint = style.preferred_checkpoint(client.models.checkpoints.keys())
-            self._checkpoint_select.value = checkpoint
-        elif style.checkpoints:
-            self._checkpoint_select.value = style.checkpoints[0]
-        self._set_checkpoint_warning()
-        self._show_edit_style(style)
-
-    def _write_checkpoint(self, style: Style):
-        value = self._checkpoint_select.value
-        if isinstance(value, str) and value != "":
-            style.checkpoints = [value]
-        self._set_checkpoint_warning()
-        self._show_edit_style(style)
-
-    def _toggle_preferred_resolution(self, checked: bool):
-        if checked and self._resolution_spin.value == 0:
-            sd_ver = resolve_arch(self.current_style, root.connection.client_if_connected)
-            self._resolution_spin.value = 640 if sd_ver is Arch.sd15 else 1024
-        elif not checked and self._resolution_spin.value > 0:
-            self._resolution_spin.value = 0
-
-    def _toggle_clip_skip(self, checked: bool):
-        if checked and self._clip_skip.value == 0:
-            arch = resolve_arch(self.current_style, root.connection.client_if_connected)
-            self._clip_skip.value = 1 if arch is Arch.sd15 else 2
-        elif not checked and self._clip_skip.value > 0:
-            self._clip_skip.value = 0
-
-    def _toggle_checkpoint_advanced(self, checked: bool):
-        for widget in self._checkpoint_advanced_widgets:
-            widget.visible = checked
+        style = self.current_style
+        self._editor.read(style)
+        self._show_builtin_info(style)
 
     def _show_builtin_info(self, style: Style):
         is_builtin = Styles.list().is_builtin(style)
-        if self._builtin_message.isVisible() != is_builtin:
-            self._builtin_message.setVisible(is_builtin)
-            self._builtin_copy.setVisible(is_builtin)
-            self._checkpoint_select.setEnabled(not is_builtin)
-            self._loras.setEnabled(not is_builtin)
-            for widget in self._style_widgets.values():
-                widget.setEnabled(not is_builtin)
-            for widget in self._checkpoint_advanced_widgets:
-                widget.setEnabled(not is_builtin)
-            self._default_sampler.setEnabled(not is_builtin)
-            self._live_sampler.setEnabled(not is_builtin)
+        self._builtin_message.setVisible(is_builtin)
+        self._builtin_copy.setVisible(is_builtin)
+        self._editor.setEnabled(not is_builtin)
 
-    def _enable_checkpoint_advanced(self):
-        arch = resolve_arch(self.current_style, root.connection.client_if_connected)
-        if arch.is_sdxl_like:
-            valid_archs = (Arch.auto, Arch.sdxl, Arch.illu, Arch.illu_v)
-        elif arch.is_flux_like:
-            valid_archs = (Arch.auto, Arch.flux, Arch.flux_k)
-        elif arch.is_qwen_like:
-            valid_archs = (Arch.auto, Arch.qwen, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l)
-        elif arch.is_flux2:
-            valid_archs = (Arch.auto, Arch.flux2_4b, Arch.flux2_9b)
-        else:
-            valid_archs = (Arch.auto, arch)
-        with SignalBlocker(self._arch_select):
-            self._arch_select.set_items([(e.value, e.name) for e in valid_archs])
-            if self.current_style.architecture in valid_archs:
-                self._arch_select.value = self.current_style.architecture
-        self._clip_skip_check.setEnabled(arch.supports_clip_skip)
-        self._clip_skip.enabled = arch.supports_clip_skip and self.current_style.clip_skip > 0
-        self._zsnr.enabled = arch.supports_attention_guidance
-        self._sag.enabled = arch.supports_attention_guidance
-
-    def _read_style(self, style: Style):
-        with self._write_guard:
-            for name, widget in self._style_widgets.items():
-                widget.value = getattr(style, name)
-            self._loras.value = style.loras  # type: ignore
-            self._default_sampler.read(style)
-            self._live_sampler.read(style)
-        self._show_builtin_info(style)
-        self._read_checkpoint(style)
-        self._enable_checkpoint_advanced()
-        self._resolution_spin.enabled = style.preferred_resolution > 0
+    def _save_style(self):
+        self.current_style.save()
 
     def _read(self):
         self._show_builtin_checkbox.setChecked(settings.show_builtin_styles)
-        if client := root.connection.client_if_connected:
-            default_vae = cast(str, StyleSettings.vae.default)
-            self._style_widgets["vae"].set_items([default_vae] + client.models.vae)
-        self._setup_edit_style()
-        self._read_style(self.current_style)
+        self._editor._read()
+        self._change_style()
 
     def _write(self):
         if settings.show_builtin_styles != self._show_builtin_checkbox.isChecked():
             settings.show_builtin_styles = self._show_builtin_checkbox.isChecked()
-        style = self.current_style
-        for name, widget in self._style_widgets.items():
-            if widget.value is not None:
-                setattr(style, name, widget.value)
-        style.loras = self._loras.value
-        self._write_checkpoint(style)
-        self._default_sampler.write(style)
-        self._live_sampler.write(style)
-        self._enable_checkpoint_advanced()
-        style.save()

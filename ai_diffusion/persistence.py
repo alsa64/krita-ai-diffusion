@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from . import eventloop
 from .backend.api import FillMode, InpaintMode
+from .defaults import defaults
 from .image import Image, ImageCollection
 from .localization import translate as _
 from .model.control import ControlLayer, ControlLayerList
