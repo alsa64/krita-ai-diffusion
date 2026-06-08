@@ -762,6 +762,14 @@ class DiffusionSettings(SettingsTab):
             "upscale_tile_overlap_auto_denoise",
             SpinBoxSetting(S._upscale_tile_overlap_auto_denoise, self, 0, 512, 8, " px"),
         )
+        self.add(
+            "upscale_model_tile_size",
+            SpinBoxSetting(S._upscale_model_tile_size, self, 256, 4096, 64, " px"),
+        )
+        self.add(
+            "upscale_model_tile_overlap",
+            SpinBoxSetting(S._upscale_model_tile_overlap, self, 0, 1024, 8, " px"),
+        )
         self.add("nsfw_filter", ComboBoxSetting(S._nsfw_filter, parent=self))
 
         nsfw_settings = [(_("Disabled"), 0.0), (_("Basic"), 0.65), (_("Strict"), 0.8)]
@@ -783,13 +791,22 @@ class DiffusionSettings(SettingsTab):
 
     def update_upscalers(self):
         upscalers = []
+        seedvr2 = []
         if client := root.connection.client_if_connected:
             upscalers = sorted(client.models.upscalers, key=str.lower)
+            seedvr2 = sorted(client.models.seedvr2_dit, key=str.lower)
         for value in [settings.upscale_model, settings.upscale_model_small]:
-            if value and value not in upscalers:
+            if value and value not in upscalers and value not in seedvr2:
                 upscalers.append(value)
 
         items = [(model.rsplit(".", 1)[0], model) for model in upscalers]
+        items.extend(
+            (
+                model if model == "SeedVR2" else f"SeedVR2 ({model.rsplit('.', 1)[0]})",
+                model,
+            )
+            for model in seedvr2
+        )
         for name in ["upscale_model", "upscale_model_small"]:
             widget: ComboBoxSetting = self._widgets[name]
             widget.set_items(items)
@@ -1246,13 +1263,22 @@ class WorkspaceDefaultsSettings(SettingsTab):
 
     def _update_upscalers(self):
         upscalers = []
+        seedvr2 = []
         if client := root.connection.client_if_connected:
             upscalers = sorted(client.models.upscalers, key=str.lower)
+            seedvr2 = sorted(client.models.seedvr2_dit, key=str.lower)
         for value in [settings.upscale_model, settings.upscale_model_small]:
-            if value and value not in upscalers:
+            if value and value not in upscalers and value not in seedvr2:
                 upscalers.append(value)
         items = [(_("Current global default"), "")]
         items.extend((model.rsplit(".", 1)[0], model) for model in upscalers)
+        items.extend(
+            (
+                model if model == "SeedVR2" else f"SeedVR2 ({model.rsplit('.', 1)[0]})",
+                model,
+            )
+            for model in seedvr2
+        )
         widget: ComboBoxSetting = self.upscaling._widgets["upscale_model"]
         widget.set_items(items)
 

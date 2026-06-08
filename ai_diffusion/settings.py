@@ -417,16 +417,16 @@ class Settings(QObject):
 
     upscale_model: str
     _upscale_model = Setting(
-        _("Default Upscale Model"),
+        _("Default Upscale Model (Quality)"),
         "4x_NMKD-Superscale-SP_178000_G.pth",
-        _("Default model for tiled upscaling and quality refinement passes."),
+        _("Default model for slower tiled upscaling and quality refinement passes."),
     )
 
     upscale_model_small: str
     _upscale_model_small = Setting(
-        _("Default Upscale Model (Small)"),
+        _("Default Upscale Model (Fast)"),
         "OmniSR_X2_DIV2K.safetensors",
-        _("Default model for small automatic upscaling refinement passes."),
+        _("Default model for faster automatic upscaling refinement passes."),
     )
 
     upscale_highres_refine_strength: float
@@ -450,6 +450,20 @@ class Settings(QObject):
         _(
             "Additional overlap in pixels scaled by denoise strength when tiled upscale tile overlap is set to Automatic."
         ),
+    )
+
+    upscale_model_tile_size: int
+    _upscale_model_tile_size = Setting(
+        _("Upscale Model Tile Size"),
+        1024,
+        _("Tile size used when applying upscale models before tiled diffusion refinement."),
+    )
+
+    upscale_model_tile_overlap: int
+    _upscale_model_tile_overlap = Setting(
+        _("Upscale Model Tile Overlap"),
+        128,
+        _("Overlap in pixels used when tiling the upscale model pass before diffusion refinement."),
     )
 
     save_image_format: ImageFileFormat
