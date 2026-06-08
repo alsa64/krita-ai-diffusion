@@ -122,6 +122,8 @@ def test_save():
     original.upscale_highres_refine_strength = 0.55
     original.upscale_tile_overlap_auto_base = 24
     original.upscale_tile_overlap_auto_denoise = 80
+    original.upscale_model_tile_size = 1536
+    original.upscale_model_tile_overlap = 192
     original.live_poll_rate = 0.2
     original.live_default_grace_period = 0.35
     original.live_max_wait_time = 4.5
@@ -183,6 +185,8 @@ def test_save():
         and result.upscale_highres_refine_strength == 0.55
         and result.upscale_tile_overlap_auto_base == 24
         and result.upscale_tile_overlap_auto_denoise == 80
+        and result.upscale_model_tile_size == 1536
+        and result.upscale_model_tile_overlap == 192
         and result.live_poll_rate == 0.2
         and result.live_default_grace_period == 0.35
         and result.live_max_wait_time == 4.5

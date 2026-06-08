@@ -1462,6 +1462,33 @@ def upscale_seedvr2_tiled(
     return w
 
 
+def upscale_with_model_tiled(
+    w: ComfyWorkflow,
+    image: Output,
+    extent: ExtentInput,
+    model_name: str,
+    tile_size: int,
+    tile_overlap: int,
+):
+    multiple = resolution.diffusion_multiple
+    min_size = multiple_of(tile_size, multiple)
+    layout = TileLayout(extent.input, min_size, tile_overlap, multiple)
+    tile_layout = w.create_tile_layout(
+        image, layout.min_size, layout.padding, layout.blending, multiple
+    )
+    upscale_model = w.load_upscale_model(model_name)
+    out_image: Output | None = None
+
+    for i in range(layout.total_tiles):
+        tile = w.extract_image_tile(image, tile_layout, i)
+        tile = w.upscale_image(upscale_model, tile)
+        out_image = (
+            tile if out_image is None else w.merge_image_tile(out_image, tile_layout, i, tile)
+        )
+
+    return ensure(out_image)
+
+
 def upscale_tiled(
     w: ComfyWorkflow,
     image: Image,
@@ -1487,8 +1514,14 @@ def upscale_tiled(
 
     in_image = w.load_image(image)
     if upscale.model:
-        upscale_model = w.load_upscale_model(upscale.model)
-        upscaled = w.upscale_image(upscale_model, in_image)
+        upscaled = upscale_with_model_tiled(
+            w,
+            in_image,
+            extent,
+            upscale.model,
+            settings.upscale_model_tile_size,
+            settings.upscale_model_tile_overlap,
+        )
     else:
         upscaled = in_image
     if extent.input != extent.initial:

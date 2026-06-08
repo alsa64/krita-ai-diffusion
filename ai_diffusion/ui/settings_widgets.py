@@ -344,13 +344,14 @@ class ComboBoxSetting(SettingWidget):
         self._combo.clear()
         if isinstance(items, type):
             for e in items:
-                self._combo.addItem(e.value, e.name)
+                self._combo.addItem(e.name, e.name)
+            self._enum_type = items
         else:
             for name in items:
                 if isinstance(name, str):
                     self._combo.addItem(name, name)
                 elif isinstance(name, Enum):
-                    self._combo.addItem(name.value, name.name)
+                    self._combo.addItem(name.name, name.name)
                     self._enum_type = type(name)
                 elif len(name) == 2:
                     self._combo.addItem(name[0], name[1])
@@ -368,7 +369,13 @@ class ComboBoxSetting(SettingWidget):
     @property
     def value(self):
         if self._enum_type is not None:
-            return self._enum_type[self._combo.currentData()]
+            current = self._combo.currentData()
+            if current is None:
+                default = self._setting.default
+                return (
+                    default if isinstance(default, self._enum_type) else next(iter(self._enum_type))
+                )
+            return self._enum_type[current]
         else:
             return self._combo.currentData()
 
