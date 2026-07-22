@@ -9,9 +9,9 @@ from typing import Any, ClassVar, NamedTuple
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
+from .backend.resources import ControlMode
 from .localization import translate as _
 from .platform_tools import is_macos, is_windows
-from .resources import ControlMode
 from .util import client_logger as log
 from .util import encode_json, read_json_with_comments, user_data_dir
 

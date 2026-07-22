@@ -3,6 +3,7 @@ import sys
 import types
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import cast
 
 from PyQt5.QtCore import QObject, QUuid, pyqtSignal
 
@@ -18,20 +19,21 @@ class _Krita:
         return None
 
 
-krita.Krita = _Krita
+krita.__dict__["Krita"] = _Krita
 sys.modules.setdefault("krita", krita)
 
-from ai_diffusion.api import InpaintMode
-from ai_diffusion.connection import Connection
-from ai_diffusion.custom_workflow import CustomGenerationMode, WorkflowCollection
+from ai_diffusion.backend.api import InpaintMode
+from ai_diffusion.backend.resources import Arch, ControlMode
 from ai_diffusion.defaults import defaults
 from ai_diffusion.document import Document
-from ai_diffusion.layer import LayerType
-from ai_diffusion.model import (
+from ai_diffusion.layer import Layer, LayerType
+from ai_diffusion.model.connection import Connection
+from ai_diffusion.model.custom_workflow import CustomGenerationMode, WorkflowCollection
+from ai_diffusion.model.model import (
     AnimationTargetLayerDefault,
     LiveScheduler,
-    Model,
     QueueMode,
+    SamplingQuality,
     TileOverlapMode,
     Workspace,
     animation_batch_frame_path,
@@ -47,6 +49,10 @@ from ai_diffusion.model import (
     preview_layer_name,
     select_default_animation_target_layer_id,
 )
+from ai_diffusion.model.model import (
+    DocumentModel as Model,
+)
+from ai_diffusion.model.region import RootRegion
 from ai_diffusion.persistence import (
     RecentlyUsedSync,
     load_document_defaults,
@@ -54,8 +60,6 @@ from ai_diffusion.persistence import (
     save_document_defaults,
     save_workspace_defaults,
 )
-from ai_diffusion.region import RootRegion
-from ai_diffusion.resources import Arch, ControlMode
 from ai_diffusion.settings import (
     ImageFileFormat,
     PerformancePreset,
@@ -511,7 +515,9 @@ def test_animation_workspace_defaults_roundtrip(tmp_path):
 
         values = load_workspace_defaults(Workspace.animation)
 
-        assert values["sampling_quality"].name == "quality"
+        sampling_quality = values["sampling_quality"]
+        assert isinstance(sampling_quality, SamplingQuality)
+        assert sampling_quality.name == "quality"
         assert values["target_layer_default"] is AnimationTargetLayerDefault.first
         assert values["batch_mode"] is False
         assert values["batch_folder_name_format"] == "{document_name}-shots"
@@ -771,27 +777,31 @@ def test_root_region_uses_configured_names_for_new_regions():
         settings.new_region_name = "Area {index}"
         settings.new_region_layer_name = "Base paint"
 
-        root_region = RootRegion(_FakeModel())
+        root_region = RootRegion(cast(Model, _FakeModel()))
         root_region.emplace().link(root_region.layers.active)
         group_region = root_region.create_region(group=True)
         layer_region = root_region.create_region(group=False)
 
-        assert group_region.first_layer.name == "Area 1"
-        assert group_region.first_layer.child_layers[0].name == "Base paint"
-        assert layer_region.first_layer.name == "Area 2"
+        group_layer = group_region.first_layer
+        layer_region_layer = layer_region.first_layer
+        assert group_layer is not None
+        assert layer_region_layer is not None
+        assert group_layer.name == "Area 1"
+        assert group_layer.child_layers[0].name == "Base paint"
+        assert layer_region_layer.name == "Area 2"
     finally:
         for name, value in values.items():
             setattr(settings, name, value)
 
 
 def _patch_root_connection(monkeypatch):
-    from ai_diffusion import root as root_module
+    from ai_diffusion.model import root as root_module
 
     monkeypatch.setattr(root_module.root, "_connection", Connection(), raising=False)
 
 
 def test_control_layer_uses_default_preset_settings(monkeypatch):
-    from ai_diffusion.control import ControlLayer, ControlPresets
+    from ai_diffusion.model.control import ControlLayer, ControlPresets
 
     _patch_root_connection(monkeypatch)
     values = {
@@ -809,7 +819,7 @@ def test_control_layer_uses_default_preset_settings(monkeypatch):
         settings.control_layer_end = 0.4
 
         model = _FakeModel()
-        control = ControlLayer(model, ControlMode.depth, model.layers.active.id, 0)
+        control = ControlLayer(cast(Model, model), ControlMode.depth, model.layers.active.id, 0)
         expected = ControlPresets.instance().interpolate(
             ControlMode.depth,
             Arch.sd15,
@@ -827,7 +837,7 @@ def test_control_layer_uses_default_preset_settings(monkeypatch):
 
 
 def test_control_layer_uses_default_custom_settings(monkeypatch):
-    from ai_diffusion.control import ControlLayer
+    from ai_diffusion.model.control import ControlLayer
 
     _patch_root_connection(monkeypatch)
     values = {
@@ -845,7 +855,7 @@ def test_control_layer_uses_default_custom_settings(monkeypatch):
         settings.control_layer_end = 0.8
 
         model = _FakeModel()
-        control = ControlLayer(model, ControlMode.line_art, model.layers.active.id, 0)
+        control = ControlLayer(cast(Model, model), ControlMode.line_art, model.layers.active.id, 0)
 
         assert control.preset_value == 1
         assert control.use_custom_strength is True
@@ -858,7 +868,7 @@ def test_control_layer_uses_default_custom_settings(monkeypatch):
 
 
 def test_control_layer_list_uses_and_updates_default_mode(monkeypatch):
-    from ai_diffusion.control import ControlLayerList
+    from ai_diffusion.model.control import ControlLayerList
 
     _patch_root_connection(monkeypatch)
     original_mode = settings.control_layer_mode
@@ -867,18 +877,19 @@ def test_control_layer_list_uses_and_updates_default_mode(monkeypatch):
         saved = []
         monkeypatch.setattr(settings, "save", lambda path=None: saved.append(path))
 
-        control_list = ControlLayerList(_FakeModel())
+        control_list = ControlLayerList(cast(Model, _FakeModel()))
         control_list.add()
 
-        assert control_list[0].mode is ControlMode.pose
+        first_control = next(iter(control_list))
+        assert first_control.mode is ControlMode.pose
 
-        control_list[0].mode = ControlMode.depth
+        first_control.mode = ControlMode.depth
 
         assert settings.control_layer_mode is ControlMode.depth
         assert saved == [None]
 
         control_list.add()
-        assert control_list[1].mode is ControlMode.depth
+        assert list(control_list)[1].mode is ControlMode.depth
     finally:
         settings.control_layer_mode = original_mode
 
@@ -991,11 +1002,17 @@ def test_recently_used_sync_tracks_animation_target_layer_default(tmp_path):
 
 
 def test_select_default_animation_target_layer_id_prefers_active_layer():
-    first = types.SimpleNamespace(
-        id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    first = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+        ),
     )
-    active = types.SimpleNamespace(
-        id="active", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    active = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="active", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+        ),
     )
 
     target = select_default_animation_target_layer_id(
@@ -1006,11 +1023,17 @@ def test_select_default_animation_target_layer_id_prefers_active_layer():
 
 
 def test_select_default_animation_target_layer_id_falls_back_to_first_image_layer():
-    first = types.SimpleNamespace(
-        id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    first = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="first", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+        ),
     )
-    missing = types.SimpleNamespace(
-        id="missing", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    missing = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="missing", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+        ),
     )
 
     target = select_default_animation_target_layer_id(
@@ -1021,11 +1044,17 @@ def test_select_default_animation_target_layer_id_falls_back_to_first_image_laye
 
 
 def test_select_default_animation_target_layer_id_uses_mask_parent_for_active_default():
-    parent = types.SimpleNamespace(
-        id="parent", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+    parent = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="parent", type=types.SimpleNamespace(is_mask=False), parent_layer=None
+        ),
     )
-    mask = types.SimpleNamespace(
-        id="mask", type=types.SimpleNamespace(is_mask=True), parent_layer=parent
+    mask = cast(
+        Layer,
+        types.SimpleNamespace(
+            id="mask", type=types.SimpleNamespace(is_mask=True), parent_layer=parent
+        ),
     )
 
     target = select_default_animation_target_layer_id(

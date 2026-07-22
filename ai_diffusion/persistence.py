@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from time import time
-from typing import Any
+from typing import Any, TypeVar
 
 from PyQt5.QtCore import QByteArray, QObject
 from PyQt5.QtGui import QImageReader
@@ -124,6 +124,20 @@ workspace_defaults_schema = {
     Workspace.custom: custom_defaults_schema,
 }
 
+T = TypeVar("T")
+
+
+def _require_default(value: object, type_: type[T]) -> T:
+    if not isinstance(value, type_):
+        raise TypeError(f"Expected {type_.__name__} default, got {type(value).__name__}")
+    return value
+
+
+def _require_float_default(value: object) -> float:
+    if not isinstance(value, (int, float)):
+        raise TypeError(f"Expected numeric default, got {type(value).__name__}")
+    return value
+
 
 def load_document_defaults():
     return defaults.read_section("document", document_defaults_schema)
@@ -167,49 +181,77 @@ class RecentlyUsedSync:
                 animation = load_workspace_defaults(Workspace.animation)
                 custom = load_workspace_defaults(Workspace.custom)
 
-                model.workspace = document["workspace"]
-                model.style = Styles.list().find(generation["style"]) or Styles.list().default
-                model.strength = generation["strength"]
-                model.region_only = generation["region_only"]
-                model.edit_mode = generation["edit_mode"]
-                model.batch_count = generation["batch_count"]
-                model.fixed_seed = generation["fixed_seed"]
-                model.resolution_multiplier = generation["resolution_multiplier"]
-                model.use_smart_resolution = generation["use_smart_resolution"]
-                model.smart_rotate = generation["smart_rotate"]
-                model.queue_mode = generation["queue_mode"]
-                model.translation_enabled = generation["translation_enabled"]
-                model.layer_count = generation["layer_count"]
-                model.inpaint.mode = generation["inpaint_mode"]
-                model.inpaint.fill = generation["inpaint_fill"]
-                model.inpaint.use_inpaint = generation["inpaint_use_model"]
-                model.inpaint.use_prompt_focus = generation["inpaint_use_prompt_focus"]
-                if generation["inpaint_context"] != InpaintContext.layer_bounds:
-                    model.inpaint.context = generation["inpaint_context"]
+                model.workspace = _require_default(document["workspace"], Workspace)
+                model.style = (
+                    Styles.list().find(_require_default(generation["style"], str))
+                    or Styles.list().default
+                )
+                model.strength = _require_float_default(generation["strength"])
+                model.region_only = _require_default(generation["region_only"], bool)
+                model.edit_mode = _require_default(generation["edit_mode"], bool)
+                model.batch_count = _require_default(generation["batch_count"], int)
+                model.fixed_seed = _require_default(generation["fixed_seed"], bool)
+                model.resolution_multiplier = _require_float_default(
+                    generation["resolution_multiplier"]
+                )
+                model.use_smart_resolution = _require_default(
+                    generation["use_smart_resolution"], bool
+                )
+                model.smart_rotate = _require_default(generation["smart_rotate"], bool)
+                model.queue_mode = _require_default(generation["queue_mode"], QueueMode)
+                model.translation_enabled = _require_default(
+                    generation["translation_enabled"], bool
+                )
+                model.layer_count = _require_default(generation["layer_count"], int)
+                model.inpaint.mode = _require_default(generation["inpaint_mode"], InpaintMode)
+                model.inpaint.fill = _require_default(generation["inpaint_fill"], FillMode)
+                model.inpaint.use_inpaint = _require_default(generation["inpaint_use_model"], bool)
+                model.inpaint.use_prompt_focus = _require_default(
+                    generation["inpaint_use_prompt_focus"], bool
+                )
+                inpaint_context = _require_default(generation["inpaint_context"], InpaintContext)
+                if inpaint_context != InpaintContext.layer_bounds:
+                    model.inpaint.context = inpaint_context
 
-                model.upscale.upscaler = upscaling["upscale_model"]
-                model.upscale.factor = upscaling["factor"]
-                model.upscale.use_diffusion = upscaling["use_diffusion"]
-                model.upscale.strength = upscaling["strength"]
-                model.upscale.unblur_strength = upscaling["unblur_strength"]
-                model.upscale.tile_overlap_mode = upscaling["tile_overlap_mode"]
-                model.upscale.tile_overlap = upscaling["tile_overlap"]
-                model.upscale.use_prompt = upscaling["use_prompt"]
+                model.upscale.upscaler = _require_default(upscaling["upscale_model"], str)
+                model.upscale.factor = _require_float_default(upscaling["factor"])
+                model.upscale.use_diffusion = _require_default(upscaling["use_diffusion"], bool)
+                model.upscale.strength = _require_float_default(upscaling["strength"])
+                model.upscale.unblur_strength = _require_float_default(upscaling["unblur_strength"])
+                model.upscale.tile_overlap_mode = _require_default(
+                    upscaling["tile_overlap_mode"], TileOverlapMode
+                )
+                model.upscale.tile_overlap = _require_default(upscaling["tile_overlap"], int)
+                model.upscale.use_prompt = _require_default(upscaling["use_prompt"], bool)
 
-                model.live.strength = live["strength"]
-                model.live.recording_format = live["recording_format"]
-                model.live.recording_folder_name_format = live["recording_folder_name_format"]
-                model.live.recording_frame_name_format = live["recording_frame_name_format"]
+                model.live.strength = _require_float_default(live["strength"])
+                model.live.recording_format = _require_default(
+                    live["recording_format"], ImageFileFormat
+                )
+                model.live.recording_folder_name_format = _require_default(
+                    live["recording_folder_name_format"], str
+                )
+                model.live.recording_frame_name_format = _require_default(
+                    live["recording_frame_name_format"], str
+                )
 
-                model.animation.sampling_quality = animation["sampling_quality"]
-                model.animation.target_layer_default = animation["target_layer_default"]
-                model.animation.batch_mode = animation["batch_mode"]
-                model.animation.batch_folder_name_format = animation["batch_folder_name_format"]
-                model.animation.batch_frame_name_format = animation["batch_frame_name_format"]
+                model.animation.sampling_quality = _require_default(
+                    animation["sampling_quality"], SamplingQuality
+                )
+                model.animation.target_layer_default = _require_default(
+                    animation["target_layer_default"], AnimationTargetLayerDefault
+                )
+                model.animation.batch_mode = _require_default(animation["batch_mode"], bool)
+                model.animation.batch_folder_name_format = _require_default(
+                    animation["batch_folder_name_format"], str
+                )
+                model.animation.batch_frame_name_format = _require_default(
+                    animation["batch_frame_name_format"], str
+                )
 
-                model.custom.mode = custom["mode"]
-                model.custom.params_ui_height = custom["params_ui_height"]
-                if workflow_id := custom["workflow_id"]:
+                model.custom.mode = _require_default(custom["mode"], CustomGenerationMode)
+                model.custom.params_ui_height = _require_default(custom["params_ui_height"], int)
+                if workflow_id := _require_default(custom["workflow_id"], str):
                     model.custom.workflow_id = workflow_id
         except Exception as e:
             log.warning(f"Failed to apply default settings to new document: {type(e)} {e}")

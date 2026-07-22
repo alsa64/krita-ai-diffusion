@@ -75,7 +75,6 @@ from .properties import ObservableProperties, Property
 from .region import Region, RegionLink, RootRegion, get_region_inpaint_mask, process_regions
 
 
-
 class QueueMode(Enum):
     back = 0
     front = 1
@@ -296,7 +295,7 @@ class DocumentModel(QObject, ObservableProperties):
             full_mask = self._mask_in_context(mask, context_bounds)
             smart_rotate, rotated_bounds = self._find_smart_rotate(full_mask, workflow_kind)
             if smart_rotate != 0 and rotated_bounds is not None:
-                image = Image.crop(Image.rotate(image, smart_rotate), rotated_bounds)
+                image = Image.crop(Image.rotate(ensure(image), smart_rotate), rotated_bounds)
                 rotated_mask = Mask.crop(Mask.rotate(full_mask, smart_rotate), rotated_bounds)
                 rotated_mask_bounds = ensure(rotated_mask.nonzero_bounds())
                 mask = Mask(

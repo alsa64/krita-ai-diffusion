@@ -1,11 +1,12 @@
 import os
+from asyncio import Future, get_running_loop
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from aiohttp import ClientSession
 from PyQt5.QtCore import pyqtBoundSignal
 
+from ai_diffusion.backend.network import RequestManager
 from ai_diffusion.model.updates import AutoUpdate, UpdateState
 from ai_diffusion.platform_tools import ZipFile
 from ai_diffusion.settings import settings
@@ -23,6 +24,19 @@ class SignalObserver:
 
     def reset(self):
         self.events = []
+
+
+class StubRequestManager(RequestManager):
+    def __init__(self, calls: list[tuple[str, float | None, str | None]]):
+        self._calls = calls
+
+    def get(
+        self, url: str, timeout: float | None = None, bearer: str | None = None
+    ) -> Future[dict[str, str]]:
+        self._calls.append((url, timeout, bearer))
+        future: Future[dict[str, str]] = get_running_loop().create_future()
+        future.set_result({"version": "1.50.6"})
+        return future
 
 
 def http_session(service_url: str):
@@ -122,16 +136,12 @@ async def test_authorization(cloud_service: CloudService):
             assert response.status == 401
 
 
-@pytest.mark.asyncio
+@qtapp
 async def test_auto_update_uses_configured_check_timeout(monkeypatch):
     calls = []
 
-    async def fake_get(url, timeout=None, bearer=None):
-        calls.append((url, timeout, bearer))
-        return {"version": "1.50.6"}
-
     updater = AutoUpdate(current_version="1.50.6", api_url="https://example.com")
-    updater._request_manager = SimpleNamespace(get=fake_get)
+    updater._request_manager = StubRequestManager(calls)
     monkeypatch.setattr(settings, "auto_update_check_timeout", 42)
 
     await updater.check()
@@ -140,19 +150,15 @@ async def test_auto_update_uses_configured_check_timeout(monkeypatch):
     assert updater.state is UpdateState.latest
 
 
-@pytest.mark.asyncio
+@qtapp
 async def test_auto_update_defaults_to_configured_cloud_api_url(monkeypatch):
     calls = []
-
-    async def fake_get(url, timeout=None, bearer=None):
-        calls.append((url, timeout, bearer))
-        return {"version": "1.50.6"}
 
     monkeypatch.setattr(settings, "cloud_api_url", "https://api.example.test")
     monkeypatch.setattr(settings, "auto_update_check_timeout", 42)
 
     updater = AutoUpdate(current_version="1.50.6")
-    updater._request_manager = SimpleNamespace(get=fake_get)
+    updater._request_manager = StubRequestManager(calls)
 
     await updater.check()
 

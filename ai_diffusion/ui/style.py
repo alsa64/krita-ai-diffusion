@@ -692,10 +692,6 @@ class StyleSettingsEditor(QWidget):
         if self._style_widgets["loras"].open_folder_button:
             self._style_widgets["loras"].open_folder_button.clicked.connect(self._open_lora_folder)
 
-    @property
-    def style(self):
-        return self._style
-
     def update_model_lists(self):
         self._read()
 

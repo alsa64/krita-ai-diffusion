@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 import krita
 from krita import DockWidget, Krita
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtBoundSignal, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -303,10 +304,13 @@ class ImageDiffusionWidget(DockWidget):
         root.model_created.connect(self.register_model)
 
         notifier = Krita.instance().notifier()
-        notifier.imageCreated.connect(lambda *_: self.update_content())
-        notifier.imageClosed.connect(lambda *_: self.update_content())
-        notifier.viewCreated.connect(lambda *_: self.update_content())
-        notifier.viewClosed.connect(lambda *_: self.update_content())
+        for signal in (
+            notifier.imageCreated,
+            notifier.imageClosed,
+            notifier.viewCreated,
+            notifier.viewClosed,
+        ):
+            cast(pyqtBoundSignal, signal).connect(lambda *_: self.update_content())
 
     def canvasChanged(self, canvas: krita.Canvas):
         if canvas is not None and canvas.view() is not None:
