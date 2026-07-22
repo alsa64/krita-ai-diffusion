@@ -70,7 +70,7 @@ def test_download_retries_honor_settings(qtapp, monkeypatch, tmp_path):
         monkeypatch.setattr(network.asyncio, "sleep", fake_sleep)
 
         async for _ in network.download(
-            None, "https://example.invalid/file", tmp_path / "file.bin"
+            QNetworkAccessManager(), "https://example.invalid/file", tmp_path / "file.bin"
         ):
             pass
 

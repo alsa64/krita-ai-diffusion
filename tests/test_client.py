@@ -15,15 +15,15 @@ from ai_diffusion.backend.api import (
     WorkflowInput,
     WorkflowKind,
 )
-from ai_diffusion.backend.client import ClientEvent, ClientModels, resolve_arch
-from ai_diffusion.backend.cloud_client import CloudClient
+from ai_diffusion.backend.client import ClientEvent, ClientModels, User, resolve_arch
+from ai_diffusion.backend.cloud_client import CloudClient, JobInfo
 from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_args, websocket_url
-from ai_diffusion.backend.network import NetworkError
+from ai_diffusion.backend.network import NetworkError, RequestManager
 from ai_diffusion.backend.resources import ControlMode, ResourceKind, UpscalerName, resource_id
 from ai_diffusion.backend.server import Server, ServerBackend, ServerState
-from ai_diffusion.model.connection import Connection
 from ai_diffusion.files import File, FileFormat, FileLibrary
 from ai_diffusion.image import Extent
+from ai_diffusion.model.connection import Connection
 from ai_diffusion.platform_tools import get_cuda_devices
 from ai_diffusion.settings import ServerMode, settings
 from ai_diffusion.style import Arch, Style
@@ -201,19 +201,24 @@ def test_configurable_default_upscalers_fall_back(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_comfy_client_uses_configured_timeouts(monkeypatch):
-    class StubRequests:
+    class StubRequests(RequestManager):
         def __init__(self):
-            self.calls = []
+            self.calls: list[tuple[object, ...]] = []
 
-        async def get(self, url, timeout=None, bearer=None):
+        def get(self, url: str, timeout: float | None = None, bearer: str | None = None):
             self.calls.append(("get", url, timeout, bearer))
+            future = asyncio.get_running_loop().create_future()
             if "model_info" in url:
-                return {"item": {}, "_meta": {"total": 100}}
-            return {}
+                future.set_result({"item": {}, "_meta": {"total": 100}})
+            else:
+                future.set_result({})
+            return future
 
-        async def download(self, url, timeout=None):
+        def download(self, url: str, timeout: float | None = None):
             self.calls.append(("download", url, timeout))
-            raise RuntimeError("download failed")
+            future = asyncio.get_running_loop().create_future()
+            future.set_exception(RuntimeError("download failed"))
+            return future
 
     client = ComfyClient("http://example.com")
     client._requests = StubRequests()
@@ -310,35 +315,26 @@ async def test_connection_sign_in_uses_configured_cloud_api_url(monkeypatch):
     assert sign_in_calls == ["https://api.example.test"]
 
 
-@pytest.mark.asyncio
-async def test_connection_connect_uses_configured_cloud_api_url(monkeypatch):
+def test_connection_create_client_uses_configured_cloud_api_url(monkeypatch):
     connection = Connection()
-    connect_calls = []
-
-    async def fake_connect(url, access_token=""):
-        connect_calls.append((url, access_token))
-        return type(
-            "Client", (), {"device_info": type("Device", (), {"type": "cloud", "vram": 24})()}
-        )()
 
     monkeypatch.setattr(settings, "cloud_api_url", "https://api.example.test")
-    monkeypatch.setattr(CloudClient, "connect", staticmethod(fake_connect))
-    connection._task = object()
+    monkeypatch.setattr(settings, "server_mode", ServerMode.cloud)
+    monkeypatch.setattr(settings, "access_token", "token-123")
 
-    await connection._connect(
-        "ignored",
-        ServerMode.cloud,
-        "token-123",
-    )
+    client = connection.create_client(settings)
 
-    assert connect_calls == [("https://api.example.test", "token-123")]
+    assert isinstance(client, CloudClient)
+    assert client.url == "https://api.example.test"
+    assert client._token == "token-123"
 
 
 @pytest.mark.asyncio
 async def test_cloud_generate_uses_configured_job_poll_interval(monkeypatch):
     client = CloudClient("https://example.com")
-    job = type("Job", (), {"input": {}, "local_id": "local", "state": None})()
-    client._user = type("User", (), {"credits": 10})()
+    job = JobInfo("local", make_default_work(), input={})
+    client._user = User("user", "Test User")
+    client._user.credits = 10
 
     responses = iter([
         {"id": "remote", "worker_id": "worker", "status": "IN_QUEUE", "user": None},

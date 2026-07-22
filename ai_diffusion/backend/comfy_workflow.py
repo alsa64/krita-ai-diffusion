@@ -590,22 +590,6 @@ class ComfyWorkflow:
             tile_debug="false",
         )
 
-    def load_seedvr2_vae(
-        self,
-        model: str,
-        device: str = "cuda:0",
-        cache_model: bool = False,
-        offload_device: str = "cpu",
-    ):
-        return self.add_cached(
-            "SeedVR2LoadVAEModel",
-            1,
-            model=model,
-            device=device,
-            cache_model=cache_model,
-            offload_device=offload_device,
-        )
-
     def upscale_seedvr2(
         self,
         image: Output,
