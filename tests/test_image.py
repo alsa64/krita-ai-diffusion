@@ -334,6 +334,15 @@ def test_mask_to_image_no_extent():
     )
 
 
+def test_mask_rotate():
+    mask = Mask(Bounds(0, 0, 8, 4), QByteArray(bytes([255]) * 32))
+
+    rotated = Mask.rotate(mask, 5)
+
+    assert rotated.bounds.extent == Extent(9, 5)
+    assert max(rotated.to_array()) == 255
+
+
 def test_mask_rectangle():
     mask = Mask.rectangle(Bounds(1, 2, 6, 5), Bounds(4, 5, 8, 7))
     # fmt: off

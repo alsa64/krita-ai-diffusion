@@ -455,7 +455,10 @@ class Image:
             return img
         transform = QTransform()
         transform.rotate(angle)
-        return Image(img._qimage.transformed(transform, smooth))
+        result = img._qimage.transformed(transform, smooth)
+        if img.is_mask:
+            result = result.convertToFormat(QImage.Format.Format_Grayscale8)
+        return Image(result)
 
     @staticmethod
     def _mask_op(lhs: Image, rhs: Image, mode: QPainter.CompositionMode):
