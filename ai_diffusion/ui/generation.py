@@ -957,7 +957,7 @@ class GenerationWidget(QWidget):
         if not self.model.edit_mode and self.model.arch.is_edit:
             menu = self.edit_menu
         elif is_one(self.model.strength):
-            if self.model.region_only:
+            if self.model.is_region_only:
                 menu = self.generate_region_menu
             elif self.model.document.selection_bounds:
                 menu = self.inpaint_menu
@@ -965,7 +965,7 @@ class GenerationWidget(QWidget):
             else:
                 menu = self.generate_menu
         else:
-            if self.model.region_only:
+            if self.model.is_region_only:
                 menu = self.refine_region_menu
             elif self.model.document.selection_bounds:
                 menu = self.refine_selection_menu
@@ -1004,7 +1004,7 @@ class GenerationWidget(QWidget):
 
         has_regions = len(regions) > 0
         has_active_region = regions.is_linked(self.model.layers.active)
-        is_region_only = has_regions and has_active_region and self.model.region_only
+        is_region_only = self.model.is_region_only
         is_edit = self.model.is_editing
         self.region_mask_button.setVisible(has_regions)
         self.region_mask_button.setEnabled(has_active_region)

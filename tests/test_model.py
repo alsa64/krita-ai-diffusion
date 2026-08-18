@@ -742,3 +742,27 @@ async def test_apply_region_group(workflows_dir: Path):
         assert isinstance(r2_right, tuple) and r2_right[3] == 0, (
             "result2: right side must be transparent"
         )
+
+
+@qtapp
+async def test_is_region_only_requires_linked_active_region(workflows_dir: Path):
+    """A stale region_only flag must not activate region-only mode unless the active
+    layer is actually linked to a region (fixes stuck Generate Region menu)."""
+    krita_doc = Krita.instance().openDocument("test")
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)  # let _handle_messages task start before disconnect
+        model.region_only = True
+
+        assert model.region_only is True
+        assert model.is_region_only is False  # no regions at all
+
+        region = model.regions.emplace()
+        assert model.is_region_only is False  # region exists, but active layer not linked
+
+        region.link(model.layers.active)
+        assert model.is_region_only is True
+
+        model.layers.active = model.layers.create(
+            "Unlinked", Image.create(_DOC_EXTENT, fill=_GREEN), _DOC_BOUNDS
+        )
+        assert model.is_region_only is False  # active layer is not part of a region
