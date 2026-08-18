@@ -1064,10 +1064,6 @@ class WorkspaceDefaultsSettings(SettingsTab):
             "strength", SliderSetting(generation_defaults_schema["strength"], self, 0.0, 1.0, "{}")
         )
         self.generation.add(
-            "region_only",
-            SwitchSetting(generation_defaults_schema["region_only"], parent=self),
-        )
-        self.generation.add(
             "edit_mode",
             SwitchSetting(generation_defaults_schema["edit_mode"], parent=self),
         )
