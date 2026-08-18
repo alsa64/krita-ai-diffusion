@@ -1213,6 +1213,11 @@ class DocumentModel(QObject, ObservableProperties):
     def is_editing(self):
         return self.arch.is_edit or (self.can_edit and self.edit_mode)
 
+    @property
+    def is_region_only(self):
+        regions = self.active_regions
+        return self.region_only and len(regions) > 0 and regions.is_linked(self.layers.active)
+
 
 class CustomInpaint(QObject, ObservableProperties):
     mode = Property(InpaintMode.automatic, persist=True)
