@@ -112,3 +112,39 @@ def test_defaults_legacy_combo(info: ComfyObjectInfo):
     assert inputs["images"] == "img"
     assert inputs["format"] == "PNG"
     assert set(inputs.keys()) == {"images", "format"}
+
+
+def test_load_seedvr2_dit_places_cached_model_on_cuda_with_cpu_offload():
+    workflow = ComfyWorkflow()
+    workflow.load_seedvr2_dit("seedvr2-dit.safetensors")
+
+    [node] = workflow.find("SeedVR2LoadDiTModel")
+    assert node.inputs == {
+        "model": "seedvr2-dit.safetensors",
+        "device": "cuda:0",
+        "cache_model": True,
+        "offload_device": "cpu",
+        "blocks_to_swap": 36,
+        "swap_io_components": False,
+        "attention_mode": "flash_attn_2",
+    }
+
+
+def test_load_seedvr2_vae_places_cached_model_on_cuda_with_cpu_offload():
+    workflow = ComfyWorkflow()
+    workflow.load_seedvr2_vae("seedvr2-vae.safetensors")
+
+    [node] = workflow.find("SeedVR2LoadVAEModel")
+    assert node.inputs == {
+        "model": "seedvr2-vae.safetensors",
+        "device": "cuda:0",
+        "cache_model": True,
+        "offload_device": "cpu",
+        "encode_tiled": True,
+        "encode_tile_size": 1024,
+        "encode_tile_overlap": 128,
+        "decode_tiled": True,
+        "decode_tile_size": 1024,
+        "decode_tile_overlap": 128,
+        "tile_debug": "false",
+    }
