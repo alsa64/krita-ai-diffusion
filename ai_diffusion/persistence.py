@@ -45,7 +45,6 @@ document_defaults_schema = {
 generation_defaults_schema = {
     "style": Setting(_("Style Preset"), "", _("Style selected for new documents.")),
     "strength": Setting(_("Strength"), 1.0),
-    "region_only": Setting(_("Region Only"), False),
     "edit_mode": Setting(_("Edit Mode"), False),
     "batch_count": Setting(_("Batch Count"), 1),
     "fixed_seed": Setting(_("Fixed Seed"), False),
@@ -187,7 +186,6 @@ class RecentlyUsedSync:
                     or Styles.list().default
                 )
                 model.strength = _require_float_default(generation["strength"])
-                model.region_only = _require_default(generation["region_only"], bool)
                 model.edit_mode = _require_default(generation["edit_mode"], bool)
                 model.batch_count = _require_default(generation["batch_count"], int)
                 model.fixed_seed = _require_default(generation["fixed_seed"], bool)
@@ -259,7 +257,6 @@ class RecentlyUsedSync:
         model.workspace_changed.connect(self._set_document_default("workspace"))
         model.style_changed.connect(self._set(Workspace.generation, "style"))
         model.strength_changed.connect(self._set(Workspace.generation, "strength"))
-        model.region_only_changed.connect(self._set(Workspace.generation, "region_only"))
         model.edit_mode_changed.connect(self._set(Workspace.generation, "edit_mode"))
         model.batch_count_changed.connect(self._set(Workspace.generation, "batch_count"))
         model.fixed_seed_changed.connect(self._set(Workspace.generation, "fixed_seed"))
@@ -370,7 +367,6 @@ class RecentlyUsedSync:
             {
                 "style": legacy.get("style", ""),
                 "strength": legacy.get("strength", 1.0),
-                "region_only": legacy.get("region_only", False),
                 "edit_mode": legacy.get("edit_mode", False),
                 "batch_count": legacy.get("batch_count", 1),
                 "fixed_seed": legacy.get("fixed_seed", False),

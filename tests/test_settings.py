@@ -419,7 +419,6 @@ def test_workspace_defaults_roundtrip(tmp_path):
             Workspace.generation,
             {
                 "strength": 0.6,
-                "region_only": True,
                 "edit_mode": True,
                 "batch_count": 3,
                 "fixed_seed": True,
@@ -443,7 +442,6 @@ def test_workspace_defaults_roundtrip(tmp_path):
         upscale_values = load_workspace_defaults(Workspace.upscaling)
 
         assert values["strength"] == 0.6
-        assert values["region_only"] is True
         assert values["edit_mode"] is True
         assert values["batch_count"] == 3
         assert values["fixed_seed"] is True
@@ -675,7 +673,7 @@ def test_workspace_defaults_migrate_legacy_document_defaults(tmp_path):
         assert document["workspace"] is Workspace.live
         assert values["style"] == "preset.json"
         assert values["strength"] == 0.4
-        assert values["region_only"] is True
+        assert "region_only" not in values
         assert values["edit_mode"] is True
         assert values["batch_count"] == 5
         assert values["fixed_seed"] is True
@@ -903,7 +901,6 @@ def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
             Workspace.generation,
             {
                 "strength": 0.55,
-                "region_only": True,
                 "edit_mode": True,
                 "resolution_multiplier": 2.4,
                 "use_smart_resolution": False,
@@ -920,7 +917,7 @@ def test_recently_used_sync_applies_new_document_generation_defaults(tmp_path):
 
         assert model.workspace is Workspace.animation
         assert model.strength == 0.55
-        assert model.region_only is True
+        assert model.region_only is False
         assert model.edit_mode is True
         assert model.resolution_multiplier == 2.4
         assert model.use_smart_resolution is False
@@ -955,7 +952,7 @@ def test_recently_used_sync_tracks_workspace_and_generation_defaults(tmp_path):
 
         values = load_workspace_defaults(Workspace.generation)
         assert values["strength"] == 0.65
-        assert values["region_only"] is True
+        assert "region_only" not in values
         assert values["edit_mode"] is True
         assert values["resolution_multiplier"] == 1.8
         assert values["use_smart_resolution"] is False
