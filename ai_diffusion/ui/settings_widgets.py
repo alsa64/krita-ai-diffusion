@@ -122,6 +122,7 @@ class SettingWidget(SettingWidgetBase):
     def __init__(self, setting: Setting, parent=None):
         super().__init__(parent)
 
+        self._setting = setting
         self._key_label = QLabel(f"<b>{setting.name}</b><br>{setting.desc}")
         self._key_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
@@ -319,12 +320,11 @@ ComboItemList = list[str] | list[tuple[str, Any]] | list[tuple[str, Any, QIcon]]
 
 
 class ComboBoxSetting(SettingWidget):
-    _suppress_change = False
-    _enum_type = None
-    _original_text = ""
-
     def __init__(self, setting: Setting, model: QAbstractItemModel | None = None, parent=None):
         super().__init__(setting, parent)
+        self._suppress_change = False
+        self._enum_type: type[Enum] | None = None
+        self._original_text = ""
         self._combo = QComboBox(self)
         if model is not None:
             self._combo.setModel(model)
@@ -343,21 +343,27 @@ class ComboBoxSetting(SettingWidget):
         self._suppress_change = True
         self._combo.clear()
         if isinstance(items, type):
-            for e in items:
-                self._combo.addItem(e.name, e.name)
+            for item in items:
+                self._combo.addItem(item.name, item.name)
             self._enum_type = items
         else:
-            for name in items:
-                if isinstance(name, str):
-                    self._combo.addItem(name, name)
-                elif isinstance(name, Enum):
-                    self._combo.addItem(name.name, name.name)
-                    self._enum_type = type(name)
-                elif len(name) == 2:
-                    self._combo.addItem(name[0], name[1])
-                elif len(name) == 3:
-                    self._combo.addItem(name[2], name[0], name[1])
+            for item in items:
+                if isinstance(item, str):
+                    self._combo.addItem(item, item)
+                elif isinstance(item, Enum):
+                    self._combo.addItem(item.name, item.name)
+                    self._enum_type = type(item)
+                elif len(item) == 2:
+                    self._combo.addItem(item[0], self._normalize_data(item[1]))
+                elif len(item) == 3:
+                    self._combo.addItem(item[2], item[0], self._normalize_data(item[1]))
         self._suppress_change = False
+
+    def _normalize_data(self, value):
+        if isinstance(value, Enum):
+            self._enum_type = type(value)
+            return value.name
+        return value
 
     def _change_value(self):
         if not self._suppress_change:
@@ -375,13 +381,15 @@ class ComboBoxSetting(SettingWidget):
                 return (
                     default if isinstance(default, self._enum_type) else next(iter(self._enum_type))
                 )
+            if isinstance(current, self._enum_type):
+                return current
             return self._enum_type[current]
         else:
             return self._combo.currentData()
 
     @value.setter
     def value(self, v):
-        if self._enum_type is not None:
+        if self._enum_type is not None and isinstance(v, self._enum_type):
             v = v.name
         index = self._combo.findData(v, Qt.ItemDataRole.UserRole)
         self._combo.setCurrentIndex(index)
