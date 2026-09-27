@@ -96,6 +96,23 @@ def test_comfy_model_hash_discovery():
     assert client.models.vae_hashes == {"my-vae.safetensors": "h3"}
 
 
+def test_qwen_image_21_model_discovery():
+    diffusion_model = "qwen_image_2.1_int8_convrot.safetensors"
+    text_encoder = "qwen3vl_8b_int8_convrot.safetensors"
+    prompt_enhancer = "qwen3.5_9b_qwen_image_2.1_pe_i2i.int8_convrot.safetensors"
+    vae = "qwen_image_2.1_vae_bf16.safetensors"
+
+    assert Arch.from_string("unknown", filename=diffusion_model) is Arch.qwen2
+
+    text_encoders = comfy_client_module._find_text_encoder_models([prompt_enhancer, text_encoder])
+    text_encoder_id = resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_8b")
+    assert text_encoders[text_encoder_id] == text_encoder
+
+    vaes = comfy_client_module._find_vae_models([vae])
+    vae_id = resource_id(ResourceKind.vae, Arch.qwen2, "default")
+    assert vaes[vae_id] == vae
+
+
 def make_default_work(size=512, steps=20):
     return WorkflowInput(
         WorkflowKind.generate,
