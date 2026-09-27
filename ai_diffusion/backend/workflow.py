@@ -11,6 +11,7 @@ from ..image import Bounds, Extent, Image, ImageCollection, Mask, multiple_of
 from ..localization import translate as _
 from ..settings import PerformanceSettings, settings
 from ..style import Style, StyleSettings
+from ..style_resolution import checkpoint_input
 from ..text import (
     eval_wildcards,
     extract_loras,
@@ -1824,7 +1825,7 @@ def prepare(
     i.conditioning = cond
     i.sampling = sampling_from_style(style, strength, is_live)
     i.sampling.seed = seed
-    i.models = style.get_models(models.checkpoints)
+    i.models = checkpoint_input(style, models)
     i.models.loras = unique(i.models.loras + (loras or []), key=lambda l: l.name)
     i.models.dynamic_caching = perf.dynamic_caching
     i.models.tiled_vae = perf.tiled_vae

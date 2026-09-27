@@ -181,17 +181,21 @@ class CheckpointInfo(NamedTuple):
     filename: str
     arch: Arch
     format: FileFormat = FileFormat.checkpoint
+    hash: str = ""  # SHA256 of the file header, empty if the server does not provide it
 
     @property
     def name(self):
         return self.filename.removesuffix(".safetensors").replace("\\", "/")
 
     def to_dict(self):
-        return {
+        result = {
             "filename": self.filename,
             "arch": self.arch.name,
             "format": self.format.name,
         }
+        if self.hash:
+            result["hash"] = self.hash
+        return result
 
     @staticmethod
     def from_dict(data: dict):
@@ -199,6 +203,7 @@ class CheckpointInfo(NamedTuple):
             data["filename"],
             ensure(Arch.from_string(data["arch"])),
             FileFormat[data.get("format", "checkpoint")],
+            data.get("hash", ""),
         )
 
     @staticmethod
@@ -218,6 +223,8 @@ class ClientModels:
         self.seedvr2_vae: list[str] = []
         self.samplers: list[str] = []
         self.schedulers: list[str] = []
+        self.lora_hashes: dict[str, str] = {}
+        self.vae_hashes: dict[str, str] = {}
         self.node_inputs = ComfyObjectInfo({})
         self.resources: dict[str, str | None] = {}
 
@@ -234,6 +241,8 @@ class ClientModels:
         models.seedvr2_vae = data.get("seedvr2_vae", [])
         models.samplers = data.get("samplers", [])
         models.schedulers = data.get("schedulers", [])
+        models.lora_hashes = data.get("lora_hashes", {})
+        models.vae_hashes = data.get("vae_hashes", {})
         models.resources = data.get("resources", {})
         return models
 

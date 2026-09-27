@@ -13,6 +13,7 @@ from .backend.api import CheckpointInput, LoraInput
 from .backend.resources import Arch
 from .defaults import defaults
 from .localization import translate as _
+from .model_resolution import resolve_model_name
 from .settings import Setting, Settings, settings
 from .util import client_logger as log
 from .util import encode_json, find_unused_path, plugin_dir, read_json_with_comments, user_data_dir
@@ -225,14 +226,8 @@ class Style(QObject):
         return self.filepath.name
 
     def preferred_checkpoint(self, available_checkpoints: Iterable[str]):
-        def sanitize(p):
-            return p.replace("\\", "/").lower()
-
-        available = {sanitize(cp): cp for cp in available_checkpoints}
-        for cp in self.checkpoints:
-            if found := available.get(sanitize(cp)):
-                return found
-        return "not-found"
+        resolved = (resolve_model_name(cp, list(available_checkpoints)) for cp in self.checkpoints)
+        return next((found for found in resolved if found is not None), "not-found")
 
     def get_models(self, available_checkpoints: Iterable[str]):
         return CheckpointInput(

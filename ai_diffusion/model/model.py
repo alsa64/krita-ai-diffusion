@@ -60,6 +60,7 @@ from ..settings import (
     settings,
 )
 from ..style import Arch, Style, Styles
+from ..style_resolution import checkpoint_input
 from ..text import create_ai_generated_xmp, create_img_metadata, extract_layers
 from ..util import PluginError, clamp, ensure, is_one, trim_text, unique
 from ..util import client_logger as log
@@ -600,7 +601,7 @@ class DocumentModel(QObject, ObservableProperties):
             if style_node is not None:
                 style = self.style
                 is_live = style_node.input("sampler_preset", "auto") == "live"
-                custom_input.models = style.get_models(client.models.checkpoints)
+                custom_input.models = checkpoint_input(style, client.models)
                 custom_input.sampling = workflow.sampling_from_style(style, 1.0, is_live)
 
                 cond = ConditioningInput(self.regions.positive, self.regions.negative)

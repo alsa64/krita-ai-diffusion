@@ -36,6 +36,7 @@ from ..image import Bounds, Image, Mask
 from ..localization import translate as _
 from ..settings import settings
 from ..style import Styles
+from ..style_resolution import checkpoint_input
 from ..ui import theme
 from ..util import PluginError, base_type_match, parse_enum, user_data_dir
 from ..util import client_logger as log
@@ -604,7 +605,7 @@ class CustomWorkspace(QObject, ObservableProperties):
                     use_live_sampling = True
                 else:  # auto
                     use_live_sampling = is_live
-                style_models = style.get_models(models.checkpoints)
+                style_models = checkpoint_input(style, models)
                 style_models.version = resolve_arch(style, models)
                 params[md.name] = CustomStyleInput(
                     style_models,

@@ -17,6 +17,7 @@ from ..image import Image, ImageCollection, Point
 from ..localization import translate as _
 from ..settings import PerformanceSettings, settings
 from ..style import Styles
+from ..style_resolution import heal_styles
 from ..util import client_logger as log
 from ..util import parse_enum
 from ..websockets.src import websockets
@@ -249,6 +250,8 @@ class ComfyClient(Client):
 
         checkpoints: dict[str, dict] = {}
         diffusion_models: dict[str, dict] = {}
+        loras: dict[str, dict] = {}
+        vaes: dict[str, dict] = {}
         async for status, result in self.try_inspect("checkpoints"):
             yield status
             checkpoints.update(result)
@@ -258,7 +261,18 @@ class ComfyClient(Client):
         async for status, result in self.try_inspect("unet_gguf"):
             yield status
             diffusion_models.update(result)
-        self._refresh_models(nodes, checkpoints, diffusion_models)
+        async for status, result in self.try_inspect("loras", optional=True):
+            yield status
+            loras.update(result)
+        async for status, result in self.try_inspect("vae", optional=True):
+            yield status
+            vaes.update(result)
+        self._refresh_models(nodes, checkpoints, diffusion_models, loras, vaes)
+
+        try:
+            heal_styles(self.models)
+        except Exception as e:
+            log.warning(f"Failed to update model references in styles: {e!s}")
 
         # Check supported base models and make sure there is at least one
         self._supported_archs = {ver: self._check_workload(ver) for ver in Arch.list()}
@@ -473,7 +487,7 @@ class ComfyClient(Client):
                 self._unsubscribe_workflows(),
             )
 
-    async def try_inspect(self, folder_name: str):
+    async def try_inspect(self, folder_name: str, optional: bool = False):
         if "gguf" in folder_name and not self.features.gguf:
             return
         try:
@@ -492,7 +506,10 @@ class ComfyClient(Client):
             if offset < total:
                 log.warning(f"Timeout while inspecting models, received {offset}/{total} entries")
         except NetworkError as e:
-            log.error(f"Error while inspecting models in {folder_name}: {e!s}")
+            if optional:
+                log.debug(f"Model inspection not available for folder {folder_name}: {e!s}")
+            else:
+                log.error(f"Error while inspecting models in {folder_name}: {e!s}")
 
     @property
     def queued_count(self):
@@ -503,7 +520,12 @@ class ComfyClient(Client):
         return self._active_job is not None
 
     def _refresh_models(
-        self, nodes: ComfyObjectInfo, checkpoints: dict | None, diffusion_models: dict | None
+        self,
+        nodes: ComfyObjectInfo,
+        checkpoints: dict | None,
+        diffusion_models: dict | None,
+        loras: dict | None = None,
+        vaes: dict | None = None,
     ):
         models = self.models
         models.node_inputs = nodes
@@ -525,12 +547,13 @@ class ComfyClient(Client):
                     Arch.from_string(info["base_model"], info.get("type", "eps"), filename),
                     info.get("is_inpaint", False),
                     info.get("is_refiner", False),
+                    info.get("hash", ""),
                 )
                 for filename, info in models.items()
             )
             return {
-                filename: CheckpointInfo(filename, arch, model_format)
-                for filename, arch, is_inpaint, is_refiner in parsed
+                filename: CheckpointInfo(filename, arch, model_format, model_hash)
+                for filename, arch, is_inpaint, is_refiner, model_hash in parsed
                 if not (arch is None or (is_inpaint and arch is not Arch.flux) or is_refiner)
             }
 
@@ -546,6 +569,8 @@ class ComfyClient(Client):
 
         models.vae = nodes.options("VAELoader", "vae_name")
         models.loras = nodes.options("LoraLoader", "lora_name")
+        models.vae_hashes = _filter_hashes(models.vae, vaes)
+        models.lora_hashes = _filter_hashes(models.loras, loras)
 
         if "UnetLoaderGGUF" in nodes:
             for name in nodes.options("UnetLoaderGGUF", "unet_name"):
@@ -717,6 +742,12 @@ def _check_for_missing_nodes(nodes: ComfyObjectInfo):
         for package in resources.required_custom_nodes
         if any(missing(node, package) for node in package.nodes)
     ]
+
+
+def _filter_hashes(names: Sequence[str], info: dict | None) -> dict[str, str]:
+    if not info:
+        return {}
+    return {name: h for name in names if (h := info.get(name, {}).get("hash"))}
 
 
 def _find_model(

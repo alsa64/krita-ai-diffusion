@@ -75,6 +75,27 @@ def test_comfy_sampler_discovery():
     assert restored.schedulers == client.models.schedulers
 
 
+def test_comfy_model_hash_discovery():
+    nodes = comfy_client_module.ComfyObjectInfo({
+        "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["foo.safetensors"], {}]}}},
+        "LoraLoader": {"input": {"required": {"lora_name": [["sub/my-lora.safetensors"], {}]}}},
+        "VAELoader": {"input": {"required": {"vae_name": [["my-vae.safetensors"], {}]}}},
+    })
+    client = ComfyClient("http://example.com")
+
+    client._refresh_models(
+        nodes,
+        {"foo.safetensors": {"base_model": "sd15", "hash": "h1"}},
+        {"bar.safetensors": {"base_model": "unknown"}},
+        {"sub/my-lora.safetensors": {"base_model": "unknown", "hash": "h2"}},
+        {"my-vae.safetensors": {"base_model": "unknown", "hash": "h3"}},
+    )
+
+    assert client.models.checkpoints["foo.safetensors"].hash == "h1"
+    assert client.models.lora_hashes == {"sub/my-lora.safetensors": "h2"}
+    assert client.models.vae_hashes == {"my-vae.safetensors": "h3"}
+
+
 def make_default_work(size=512, steps=20):
     return WorkflowInput(
         WorkflowKind.generate,
