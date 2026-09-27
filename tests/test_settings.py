@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from PyQt5.QtCore import QObject, QUuid, pyqtSignal
+from PyQt6.QtCore import QObject, QUuid, pyqtSignal
 
 krita = types.ModuleType("krita")
 
@@ -1103,6 +1103,63 @@ def test_recently_used_sync_tracks_custom_workspace_defaults(tmp_path):
         assert values["params_ui_height"] == 360
     finally:
         defaults._path = original_path
+
+
+def test_explicit_sampler_settings_roundtrip(tmp_path):
+    path = tmp_path / "style.json"
+    style = Style(path)
+    legacy_sampler = style.sampler
+    legacy_live_sampler = style.live_sampler
+    style.sampler_name = "heunpp2"
+    style.scheduler = "beta"
+    style.sampler_steps = 31
+    style.sampler_minimum_steps = 7
+    style.cfg_scale = 4.5
+    style.live_sampler_name = "euler"
+    style.live_scheduler = "simple"
+    style.live_sampler_steps = 9
+    style.live_sampler_minimum_steps = 2
+    style.live_cfg_scale = 1.2
+
+    style.save()
+    saved = json.loads(path.read_text())
+    loaded = Style.load(path)
+
+    assert saved["sampler"] == legacy_sampler
+    assert saved["live_sampler"] == legacy_live_sampler
+    assert loaded is not None
+    assert loaded.sampler_name == "heunpp2"
+    assert loaded.scheduler == "beta"
+    assert loaded.get_steps(is_live=False) == (7, 31)
+    assert loaded.cfg_scale == 4.5
+    assert loaded.live_sampler_name == "euler"
+    assert loaded.live_scheduler == "simple"
+    assert loaded.get_steps(is_live=True) == (2, 9)
+    assert loaded.live_cfg_scale == 1.2
+
+
+def test_legacy_sampler_presets_migrate_to_explicit_settings(tmp_path):
+    path = tmp_path / "style.json"
+    path.write_text(
+        json.dumps({
+            "sampler": "Alternative - Euler A",
+            "sampler_steps": 22,
+            "cfg_scale": 5.0,
+            "live_sampler": "Flux - Turbo",
+            "live_sampler_steps": 8,
+            "live_cfg_scale": 1.0,
+        })
+    )
+
+    style = Style.load(path)
+
+    assert style is not None
+    assert style.sampler_name == "euler_ancestral"
+    assert style.scheduler == "normal"
+    assert style.sampler_minimum_steps == 4
+    assert style.live_sampler_name == "euler"
+    assert style.live_scheduler == "simple"
+    assert style.live_sampler_minimum_steps == 3
 
 
 def test_sampler_presets(tmp_path_factory):

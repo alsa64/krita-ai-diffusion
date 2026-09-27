@@ -506,6 +506,17 @@ class ComfyClient(Client):
         self, nodes: ComfyObjectInfo, checkpoints: dict | None, diffusion_models: dict | None
     ):
         models = self.models
+        models.node_inputs = nodes
+        models.samplers = (
+            nodes.options("KSampler", "sampler_name")
+            or nodes.options("KSamplerAdvanced", "sampler_name")
+            or nodes.options("KSamplerSelect", "sampler_name")
+        )
+        models.schedulers = (
+            nodes.options("KSampler", "scheduler")
+            or nodes.options("KSamplerAdvanced", "scheduler")
+            or nodes.options("BasicScheduler", "scheduler")
+        )
 
         def parse_model_info(models: dict, model_format: FileFormat):
             parsed = (

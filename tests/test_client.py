@@ -49,6 +49,32 @@ def comfy_server(qtapp):
     qtapp.run(server.stop())
 
 
+def test_comfy_sampler_discovery():
+    nodes = comfy_client_module.ComfyObjectInfo({
+        "KSampler": {
+            "input": {
+                "required": {
+                    "sampler_name": [["euler", "heunpp2"], {}],
+                    "scheduler": [["normal", "beta"], {}],
+                }
+            }
+        }
+    })
+    client = ComfyClient("http://example.com")
+
+    client._refresh_models(nodes, None, None)
+
+    assert client.models.samplers == ["euler", "heunpp2"]
+    assert client.models.schedulers == ["normal", "beta"]
+
+    restored = ClientModels.from_dict({
+        "samplers": client.models.samplers,
+        "schedulers": client.models.schedulers,
+    })
+    assert restored.samplers == client.models.samplers
+    assert restored.schedulers == client.models.schedulers
+
+
 def make_default_work(size=512, steps=20):
     return WorkflowInput(
         WorkflowKind.generate,

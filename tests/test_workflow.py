@@ -104,18 +104,23 @@ def default_style(client: Client, arch=Arch.sd15):
     if not arch.is_sdxl_like:
         style.style_prompt = ""
     if arch.is_flux_like:
-        style.sampler = "Flux - Euler simple"
+        style.sampler_name = "euler"
+        style.scheduler = "simple"
         style.cfg_scale = 3.5
     if arch is Arch.zimage:
-        style.sampler = "Flux - Euler simple"
+        style.sampler_name = "euler"
+        style.scheduler = "simple"
         style.cfg_scale = 1.0
         style.sampler_steps = 8
     if arch.is_flux2:
-        style.sampler = "Flux 2 - Euler"
+        style.sampler_name = "euler"
+        style.scheduler = "flux2"
+        style.sampler_minimum_steps = 3
         style.cfg_scale = 1.0
         style.sampler_steps = 5
     if arch is Arch.anima:
-        style.sampler = "Flux - Euler simple"
+        style.sampler_name = "euler"
+        style.scheduler = "simple"
         style.cfg_scale = 3.5
         style.sampler_steps = 20
     return style
@@ -133,6 +138,34 @@ def create(kind: WorkflowKind, client: Client, **kwargs):
     )
     kwargs["cond"] = prompt.conditioning
     return workflow.prepare(kind, models=client.models, loras=prompt.loras, **kwargs)
+
+
+def test_sampling_from_style_uses_explicit_settings():
+    style = Style(Path("test.json"))
+    style.sampler_name = "heunpp2"
+    style.scheduler = "beta"
+    style.sampler_steps = 30
+    style.sampler_minimum_steps = 6
+    style.cfg_scale = 4.5
+    style.live_sampler_name = "euler"
+    style.live_scheduler = "simple"
+    style.live_sampler_steps = 8
+    style.live_sampler_minimum_steps = 2
+    style.live_cfg_scale = 1.0
+
+    quality = workflow.sampling_from_style(style, strength=0.1, is_live=False)
+    performance = workflow.sampling_from_style(style, strength=1.0, is_live=True)
+
+    assert quality.sampler == "heunpp2"
+    assert quality.scheduler == "beta"
+    assert quality.cfg_scale == 4.5
+    assert quality.total_steps == 60
+    assert quality.start_step == 54
+    assert performance.sampler == "euler"
+    assert performance.scheduler == "simple"
+    assert performance.cfg_scale == 1.0
+    assert performance.total_steps == 8
+    assert performance.start_step == 0
 
 
 def test_highres_refine_sampler_params_uses_setting(monkeypatch):

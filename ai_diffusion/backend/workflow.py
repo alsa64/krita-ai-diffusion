@@ -10,7 +10,7 @@ from ..files import FileFormat, FileLibrary
 from ..image import Bounds, Extent, Image, ImageCollection, Mask, multiple_of
 from ..localization import translate as _
 from ..settings import PerformanceSettings, settings
-from ..style import SamplerPresets, Style, StyleSettings
+from ..style import Style, StyleSettings
 from ..text import (
     eval_wildcards,
     extract_loras,
@@ -63,14 +63,14 @@ def generate_seed():
 
 
 def sampling_from_style(style: Style, strength: float, is_live: bool):
-    sampler_name = style.live_sampler if is_live else style.sampler
+    sampler = style.live_sampler_name if is_live else style.sampler_name
+    scheduler = style.live_scheduler if is_live else style.scheduler
     cfg = style.live_cfg_scale if is_live else style.cfg_scale
     min_steps, max_steps = style.get_steps(is_live=is_live)
-    preset = SamplerPresets.instance()[sampler_name]
     result = SamplingInput(
-        sampler=preset.sampler,
-        scheduler=preset.scheduler,
-        cfg_scale=cfg or preset.cfg,
+        sampler=sampler,
+        scheduler=scheduler,
+        cfg_scale=cfg,
         total_steps=max_steps,
     )
     if strength < 1.0:
@@ -1835,7 +1835,6 @@ def prepare(
 
     model_set = models.for_arch(arch)
     has_ip_adapter = model_set.ip_adapter.find(ControlMode.reference) is not None
-    i.models.loras += _get_sampling_lora(style, is_live, model_set, models)
     all_control = cond.control + [c for r in cond.regions for c in r.control]
     face_weight = median_or_zero(c.strength for c in all_control if c.mode is ControlMode.face)
     if face_weight > 0:
@@ -2067,40 +2066,6 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
         )
     else:
         raise ValueError(f"Unsupported workflow kind: {i.kind}")
-
-
-def _get_sampling_lora(style: Style, is_live: bool, model_set: ModelDict, models: ClientModels):
-    sampler_name = style.live_sampler if is_live else style.sampler
-    preset = SamplerPresets.instance()[sampler_name]
-    if preset.lora:
-        file = model_set.lora.find(preset.lora)
-        if file is None and preset.lora not in models.loras:
-            res = resources.search_path(ResourceKind.lora, model_set.arch, preset.lora)
-            if res is None and preset.lora == "lightning":
-                raise ValueError(
-                    f"The chosen sampler preset '{sampler_name}' requires LoRA "
-                    f"'{preset.lora}', which is not supported by {model_set.arch.value}."
-                    " Please choose a different sampler."
-                )
-            elif res is None:
-                raise ValueError(
-                    _(
-                        "Could not find LoRA '{lora}' used by sampler preset '{name}'",
-                        lora=preset.lora,
-                        name=sampler_name,
-                    )
-                )
-            else:
-                raise ValueError(
-                    _(
-                        "Could not find LoRA '{lora}' ({models}) used by sampler preset '{name}'",
-                        lora=preset.lora,
-                        name=sampler_name,
-                        models=", ".join(res),
-                    )
-                )
-        return [LoraInput(file or preset.lora, 1.0)]
-    return []
 
 
 def _collect_lora_triggers(loras: list[LoraInput], files: FileLibrary):

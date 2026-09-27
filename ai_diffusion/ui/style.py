@@ -30,7 +30,7 @@ from ..files import File, FileFilter, FileFormat, FileSource
 from ..localization import translate as _
 from ..model.root import root
 from ..settings import ServerMode, Setting, settings
-from ..style import SamplerPresets, Style, Styles, StyleSettings
+from ..style import Style, Styles, StyleSettings
 from . import theme
 from .settings_widgets import (
     ComboBoxSetting,
@@ -490,42 +490,40 @@ class SamplerWidget(QWidget):
     def __init__(self, prefix: str, title: str, parent):
         super().__init__(parent)
         self.prefix = prefix
+        self._sampler_items: list[str] = []
+        self._scheduler_items: list[str] = []
 
         expander = ExpanderButton(title, self)
-
-        self._preset = QComboBox(self)
-        self._preset.addItems(SamplerPresets.instance().names())
-        self._preset.setMinimumWidth(230)
-        self._preset.currentIndexChanged.connect(self._select_preset)
-
         header_layout = QHBoxLayout()
         header_layout.addWidget(expander)
         header_layout.addStretch()
-        header_layout.addWidget(self._preset)
 
-        anchor = _("Edit custom presets")
-        self._user_presets_link = QLabel(f"<a href='samplers.json'>{anchor}</a>", self)
-        self._user_presets_link.linkActivated.connect(self._open_user_presets)
-
-        self._sampler_info = QLabel("", self)
-
-        info_layout = QHBoxLayout()
-        info_layout.addWidget(self._sampler_info)
-        info_layout.addStretch()
-        info_layout.addWidget(self._user_presets_link)
-
+        self._sampler = ComboBoxSetting(StyleSettings.sampler_name, parent=self)
+        self._scheduler = ComboBoxSetting(StyleSettings.scheduler, parent=self)
         self._steps = SliderSetting(StyleSettings.sampler_steps, self, 1, 100, suffix=" steps")
         self._steps.slider.setSoftMaximum(50)
-        self._steps.value_changed.connect(self.notify_changed)
-
-        self._cfg = SliderSetting(StyleSettings.cfg_scale, self, 1.0, 24.0, decimals=1)
+        self._minimum_steps = SliderSetting(
+            StyleSettings.sampler_minimum_steps, self, 0, 100, suffix=" steps"
+        )
+        self._minimum_steps.slider.setSoftMaximum(20)
+        self._cfg = SliderSetting(StyleSettings.cfg_scale, self, 0.0, 24.0, decimals=1)
         self._cfg.slider.setSoftMaximum(12.0)
-        self._cfg.value_changed.connect(self.notify_changed)
+
+        for widget in [
+            self._sampler,
+            self._scheduler,
+            self._steps,
+            self._minimum_steps,
+            self._cfg,
+        ]:
+            widget.value_changed.connect(self.notify_changed)
 
         extended_layout = QVBoxLayout()
         extended_layout.setContentsMargins(16, 2, 0, 2)
-        extended_layout.addLayout(info_layout)
+        extended_layout.addWidget(self._sampler)
+        extended_layout.addWidget(self._scheduler)
         extended_layout.addWidget(self._steps)
+        extended_layout.addWidget(self._minimum_steps)
         extended_layout.addWidget(self._cfg)
 
         self._extended = QWidget(self)
@@ -539,43 +537,35 @@ class SamplerWidget(QWidget):
         layout.addWidget(self._extended)
         self.setLayout(layout)
 
-    @property
-    def preset(self):
-        name = self._preset.currentText()
-        return SamplerPresets.instance()[name]
-
-    def _select_preset(self, index: int):
-        preset = self.preset
-        self._steps.value = preset.steps
-        self._cfg.value = preset.cfg
-        self._update_info()
-        self.notify_changed()
-
-    def _update_info(self):
-        preset = self.preset
-        text = "<b>" + _("Sampler") + f":</b> {preset.sampler} / {preset.scheduler}"
-        if preset.lora:
-            text += f" +LoRA '{preset.lora}'"
-        self._sampler_info.setText(text)
-
-    def _open_user_presets(self):
-        path = SamplerPresets.instance().write_stub()
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
-            # No associated application, open the folder instead
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
-
     def notify_changed(self):
         self.value_changed.emit()
 
+    def set_items(self, samplers: list[str], schedulers: list[str]):
+        self._sampler_items = samplers
+        self._scheduler_items = schedulers
+
+    @staticmethod
+    def _set_combo_items(widget: ComboBoxSetting, items: list[str], value: str):
+        items = list(items)
+        if value and value not in items:
+            items.append(value)
+        widget.set_items(items)
+        widget.value = value
+
     def read(self, style: Style):
-        self._preset.setCurrentText(getattr(style, f"{self.prefix}sampler"))
+        sampler = getattr(style, f"{self.prefix}sampler_name")
+        scheduler = getattr(style, f"{self.prefix}scheduler")
+        self._set_combo_items(self._sampler, self._sampler_items, sampler)
+        self._set_combo_items(self._scheduler, self._scheduler_items, scheduler)
         self._steps.value = getattr(style, f"{self.prefix}sampler_steps")
+        self._minimum_steps.value = getattr(style, f"{self.prefix}sampler_minimum_steps")
         self._cfg.value = getattr(style, f"{self.prefix}cfg_scale")
-        self._update_info()
 
     def write(self, style: Style):
-        setattr(style, f"{self.prefix}sampler", self._preset.currentText())
+        setattr(style, f"{self.prefix}sampler_name", self._sampler.value)
+        setattr(style, f"{self.prefix}scheduler", self._scheduler.value)
         setattr(style, f"{self.prefix}sampler_steps", self._steps.value)
+        setattr(style, f"{self.prefix}sampler_minimum_steps", self._minimum_steps.value)
         setattr(style, f"{self.prefix}cfg_scale", self._cfg.value)
 
 
@@ -724,6 +714,8 @@ class StyleSettingsEditor(QWidget):
         if client := root.connection.client_if_connected:
             default_vae = cast(str, StyleSettings.vae.default)
             self._style_widgets["vae"].set_items([default_vae] + client.models.vae)
+            self._default_sampler.set_items(client.models.samplers, client.models.schedulers)
+            self._live_sampler.set_items(client.models.samplers, client.models.schedulers)
         self._setup_edit_style()
         if self._style is not None:
             self.read(self._style)

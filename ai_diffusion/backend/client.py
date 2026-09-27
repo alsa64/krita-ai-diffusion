@@ -216,6 +216,8 @@ class ClientModels:
         self.upscalers: list[str] = []
         self.seedvr2_dit: list[str] = []
         self.seedvr2_vae: list[str] = []
+        self.samplers: list[str] = []
+        self.schedulers: list[str] = []
         self.node_inputs = ComfyObjectInfo({})
         self.resources: dict[str, str | None] = {}
 
@@ -230,6 +232,8 @@ class ClientModels:
         models.upscalers = data.get("upscalers", [])
         models.seedvr2_dit = data.get("seedvr2_dit", [])
         models.seedvr2_vae = data.get("seedvr2_vae", [])
+        models.samplers = data.get("samplers", [])
+        models.schedulers = data.get("schedulers", [])
         models.resources = data.get("resources", {})
         return models
 

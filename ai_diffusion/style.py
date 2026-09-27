@@ -98,14 +98,19 @@ class StyleSettings:
         _("Select an alternative style to use for for instruction-based editing"),
     )
 
-    sampler = Setting(_("Sampler"), "Default - DPM++ 2M", _("The sampling strategy and scheduler"))
-
+    sampler = Setting(_("Sampler"), "Default - DPM++ 2M", _("Legacy sampler preset"))
+    sampler_name = Setting(_("Sampler"), "dpmpp_2m", _("The sampling algorithm"))
+    scheduler = Setting(_("Scheduler"), "karras", _("The noise schedule"))
     sampler_steps = Setting(
         _("Sampler Steps"),
         20,
         _("Higher values can produce more refined results but take longer"),
     )
-
+    sampler_minimum_steps = Setting(
+        _("Minimum Steps"),
+        4,
+        _("Minimum number of sampling steps used at low denoise strength"),
+    )
     cfg_scale = Setting(
         _("Guidance Strength (CFG Scale)"),
         7.0,
@@ -113,7 +118,10 @@ class StyleSettings:
     )
 
     live_sampler = Setting(_("Sampler"), "Realtime - Hyper", sampler.desc)
+    live_sampler_name = Setting(_("Sampler"), "euler", sampler_name.desc)
+    live_scheduler = Setting(_("Scheduler"), "sgm_uniform", scheduler.desc)
     live_sampler_steps = Setting(_("Sampler Steps"), 6, sampler_steps.desc)
+    live_sampler_minimum_steps = Setting(_("Minimum Steps"), 3, sampler_minimum_steps.desc)
     live_cfg_scale = Setting(_("Guidance Strength (CFG Scale)"), 1.8, cfg_scale.desc)
 
 
@@ -134,10 +142,16 @@ class Style(QObject):
     preferred_resolution: int = StyleSettings.preferred_resolution.default
     linked_edit_style: str = StyleSettings.linked_edit_style.default
     sampler: str = StyleSettings.sampler.default
+    sampler_name: str = StyleSettings.sampler_name.default
+    scheduler: str = StyleSettings.scheduler.default
     sampler_steps: int = StyleSettings.sampler_steps.default
+    sampler_minimum_steps: int = StyleSettings.sampler_minimum_steps.default
     cfg_scale: float = StyleSettings.cfg_scale.default
     live_sampler: str = StyleSettings.live_sampler.default
+    live_sampler_name: str = StyleSettings.live_sampler_name.default
+    live_scheduler: str = StyleSettings.live_scheduler.default
     live_sampler_steps: int = StyleSettings.live_sampler_steps.default
+    live_sampler_minimum_steps: int = StyleSettings.live_sampler_minimum_steps.default
     live_cfg_scale: float = StyleSettings.live_cfg_scale.default
 
     changed = pyqtSignal(str, object)
@@ -183,6 +197,8 @@ class Style(QObject):
             style.live_sampler = _map_sampler_preset(
                 filepath, style.live_sampler, style.live_sampler_steps, style.live_cfg_scale
             )
+            _migrate_sampler_settings(style, cfg)
+            _migrate_sampler_settings(style, cfg, "live_")
             if "sd_checkpoint" in cfg:
                 style.checkpoints = [cfg["sd_checkpoint"]]
         except json.JSONDecodeError as e:
@@ -230,12 +246,9 @@ class Style(QObject):
         )
 
     def get_steps(self, is_live: bool) -> tuple[int, int]:
-        sampler_name = self.live_sampler if is_live else self.sampler
-        preset = SamplerPresets.instance()[sampler_name]
         max_steps = self.live_sampler_steps if is_live else self.sampler_steps
-        max_steps = max_steps or preset.steps
-        min_steps = min(preset.minimum_steps, max_steps)
-        return min_steps, max_steps
+        min_steps = self.live_sampler_minimum_steps if is_live else self.sampler_minimum_steps
+        return min(min_steps, max_steps), max_steps
 
 
 style_defaults_schema = {
@@ -261,6 +274,18 @@ def _map_sampler_preset(filepath: str | Path, name: str, steps: int, cfg: float)
     else:
         log.warning(f"Style {filepath} has invalid sampler preset {name}")
         return StyleSettings.sampler.default
+
+
+def _migrate_sampler_settings(style: Style, cfg: dict, prefix=""):
+    preset = SamplerPresets.instance()[getattr(style, f"{prefix}sampler")]
+    values = {
+        f"{prefix}sampler_name": preset.sampler,
+        f"{prefix}scheduler": preset.scheduler,
+        f"{prefix}sampler_minimum_steps": preset.minimum_steps,
+    }
+    for name, value in values.items():
+        if name not in cfg:
+            setattr(style, name, value)
 
 
 class Styles(QObject):

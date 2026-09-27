@@ -90,7 +90,8 @@ class JobParams:
     def set_style(self, style: Style, checkpoint: str, resolution_multiplier: float | None = None):
         self.metadata["style"] = style.filename
         self.metadata["checkpoint"] = checkpoint
-        self.metadata["sampler"] = style.sampler
+        self.metadata["sampler"] = style.sampler_name
+        self.metadata["scheduler"] = style.scheduler
         self.metadata["steps"] = style.sampler_steps
         self.metadata["guidance"] = style.cfg_scale
         if resolution_multiplier is not None:
