@@ -728,7 +728,7 @@ class DiffusionSettings(SettingsTab):
         self.add("control_layer_mode", ComboBoxSetting(S._control_layer_mode, parent=self))
         self.add(
             "control_layer_preset_value",
-            SliderSetting(S._control_layer_preset_value, self, 0, 4, "{}"),
+            SliderSetting(S._control_layer_preset_value, self, 0, 4),
         )
         self.add(
             "control_layer_use_custom_strength",
@@ -736,21 +736,21 @@ class DiffusionSettings(SettingsTab):
         )
         self.add(
             "control_layer_strength",
-            SliderSetting(S._control_layer_strength, self, 0.0, 1.5, "{}"),
+            SliderSetting(S._control_layer_strength, self, 0.0, 1.5, decimals=2),
         )
         self.add(
             "control_layer_start",
-            SliderSetting(S._control_layer_start, self, 0.0, 1.0, "{}"),
+            SliderSetting(S._control_layer_start, self, 0.0, 1.0, decimals=2),
         )
         self.add(
             "control_layer_end",
-            SliderSetting(S._control_layer_end, self, 0.0, 1.0, "{}"),
+            SliderSetting(S._control_layer_end, self, 0.0, 1.0, decimals=2),
         )
         self.add("upscale_model", ComboBoxSetting(S._upscale_model, parent=self))
         self.add("upscale_model_small", ComboBoxSetting(S._upscale_model_small, parent=self))
         self.add(
             "upscale_highres_refine_strength",
-            SliderSetting(S._upscale_highres_refine_strength, self, 0.0, 1.0, "{}"),
+            SliderSetting(S._upscale_highres_refine_strength, self, 0.0, 1.0, decimals=2),
         )
         self.add(
             "upscale_tile_overlap_auto_base",
@@ -1061,7 +1061,8 @@ class WorkspaceDefaultsSettings(SettingsTab):
             "style", ComboBoxSetting(generation_defaults_schema["style"], parent=self)
         )
         self.generation.add(
-            "strength", SliderSetting(generation_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+            "strength",
+            SliderSetting(generation_defaults_schema["strength"], self, 0.0, 1.0, decimals=2),
         )
         self.generation.add(
             "edit_mode",
@@ -1077,7 +1078,12 @@ class WorkspaceDefaultsSettings(SettingsTab):
         self.generation.add(
             "resolution_multiplier",
             SliderSetting(
-                generation_defaults_schema["resolution_multiplier"], self, 0.1, 4.0, "{:.1f}x"
+                generation_defaults_schema["resolution_multiplier"],
+                self,
+                0.1,
+                4.0,
+                decimals=1,
+                suffix="x",
             ),
         )
         self.generation.add(
@@ -1124,18 +1130,22 @@ class WorkspaceDefaultsSettings(SettingsTab):
             ComboBoxSetting(upscaling_defaults_schema["upscale_model"], parent=self),
         )
         self.upscaling.add(
-            "factor", SliderSetting(upscaling_defaults_schema["factor"], self, 1.0, 4.0, "{}x")
+            "factor",
+            SliderSetting(
+                upscaling_defaults_schema["factor"], self, 1.0, 4.0, decimals=2, suffix="x"
+            ),
         )
         self.upscaling.add(
             "use_diffusion",
             SwitchSetting(upscaling_defaults_schema["use_diffusion"], parent=self),
         )
         self.upscaling.add(
-            "strength", SliderSetting(upscaling_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+            "strength",
+            SliderSetting(upscaling_defaults_schema["strength"], self, 0.0, 1.0, decimals=2),
         )
         self.upscaling.add(
             "unblur_strength",
-            SliderSetting(upscaling_defaults_schema["unblur_strength"], self, 0.0, 1.0, "{}"),
+            SliderSetting(upscaling_defaults_schema["unblur_strength"], self, 0.0, 1.0, decimals=2),
         )
         self.upscaling.add(
             "tile_overlap_mode",
@@ -1151,7 +1161,7 @@ class WorkspaceDefaultsSettings(SettingsTab):
 
         self.live = WorkspaceDefaultsPage(_("Live"), Workspace.live)
         self.live.add(
-            "strength", SliderSetting(live_defaults_schema["strength"], self, 0.0, 1.0, "{}")
+            "strength", SliderSetting(live_defaults_schema["strength"], self, 0.0, 1.0, decimals=2)
         )
         self.live.add(
             "recording_format",
@@ -1490,7 +1500,7 @@ class AdvancedSettings(SettingsTab):
         )
         self.add(
             "flux_inpaint_cfg_scale",
-            SliderSetting(S._flux_inpaint_cfg_scale, self, 1.0, 50.0, "{}"),
+            SliderSetting(S._flux_inpaint_cfg_scale, self, 1.0, 50.0, decimals=1),
         )
         self.add(
             "server_connect_retry_attempts",

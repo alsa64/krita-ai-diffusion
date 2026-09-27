@@ -159,7 +159,6 @@ def save_workspace_defaults(workspace: Workspace, values: dict[str, Any]):
     )
 
 
-
 class RecentlyUsedSync:
     """Stores the most recently used parameters for various settings across all models.
     This is used to initialize new models with the last used parameters if they are
@@ -393,8 +392,6 @@ class RecentlyUsedSync:
                 "tile_overlap": legacy.get("tile_overlap", 128),
             },
         )
-
-
 
 
 @dataclass
