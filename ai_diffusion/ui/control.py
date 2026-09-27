@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QMetaObject, Qt, pyqtSignal
+from pathlib import Path
+
+from PyQt6.QtCore import QMetaObject, QMimeData, Qt, QUuid, pyqtSignal
 from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -16,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..backend.resources import ControlMode
+from ..image import Image
 from ..localization import translate as _
 from ..model.control import ControlLayer, ControlLayerList
 from ..model.properties import Binding, bind, bind_combo, bind_toggle
@@ -23,6 +27,8 @@ from ..model.root import root
 from . import theme
 from .interval_slider import IntervalSlider
 from .theme import SignalBlocker
+
+_load_reference_entry = "\0load-reference"
 
 
 class ControlWidget(QWidget):
@@ -50,7 +56,9 @@ class ControlWidget(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self._update_layers()
+        self.layer_select.currentIndexChanged.connect(self._select_source)
         root.active_model.layers.changed.connect(self._update_layers)
+        root.active_model.reference_images_changed.connect(self._update_layers)
 
         self.preset_slider = QSlider(self)
         self.preset_slider.setOrientation(Qt.Orientation.Horizontal)
@@ -191,7 +199,6 @@ class ControlWidget(QWidget):
 
         self._connections = [
             bind_combo(control, "mode", self.mode_select),
-            bind_combo(control, "layer_id", self.layer_select),
             bind_toggle(control, "use_custom_strength", self.custom_checkbox),
             bind(control, "preset_value", self.preset_slider, "value"),
             bind(control, "strength", self.strength_slider, "value"),
@@ -213,18 +220,51 @@ class ControlWidget(QWidget):
         Binding.disconnect_all(self._connections)
 
     def _update_layers(self):
-        layers = reversed(root.active_model.layers.images)
+        model = root.active_model
         with SignalBlocker(self.layer_select):
             self.layer_select.clear()
             index = -1
-            for layer in layers:
-                self.layer_select.addItem(layer.name, layer.id)
-                if layer.id == self._control.layer_id:
+            for ref in model.reference_images:
+                self.layer_select.addItem(theme.icon("control-reference"), ref.name, ref.id)
+                if self._control.ref_image_id == ref.id:
                     index = self.layer_select.count() - 1
-            if index == -1 and self._control_list and self._control in self._control_list:
-                self.remove()
-            elif index >= 0:
+            if len(model.reference_images) > 0:
+                self.layer_select.insertSeparator(self.layer_select.count())
+            for layer in reversed(model.layers.images):
+                self.layer_select.addItem(layer.name, layer.id)
+                if not self._control.ref_image_id and layer.id == self._control.layer_id:
+                    index = self.layer_select.count() - 1
+            self.layer_select.addItem(
+                theme.icon("add"), _("Reference from File…"), (_load_reference_entry)
+            )
+            if index >= 0:
                 self.layer_select.setCurrentIndex(index)
+        if index == -1 and self._control_list and self._control in self._control_list:
+            self.remove()
+
+    def _select_source(self, index: int):
+        data = self.layer_select.itemData(index)
+        if data == _load_reference_entry:
+            self._add_reference_from_file()
+        elif isinstance(data, QUuid):
+            self._control.set_source_layer(data)
+        elif isinstance(data, str):
+            self._control.set_source_reference(data)
+
+    def _add_reference_from_file(self):
+        exts = " *.png *.jpg *.jpeg *.webp *.bmp"
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self, _("Add Reference Images"), str(Path.home()), _("Images") + f" ({exts})"
+        )
+        model = root.active_model
+        first = None
+        for path_str in paths:
+            if image := Image.load(Path(path_str)):
+                ref = model.add_reference_image(image, Path(path_str).stem)
+                first = first or ref
+        if first is not None:
+            self._control.set_source_reference(first.id)
+        self._update_layers()
 
     def remove(self):
         assert self._control_list is not None
@@ -235,7 +275,8 @@ class ControlWidget(QWidget):
         self._update_visibility()
 
     def _add_pose_character(self):
-        root.active_model.document.add_pose_character(self._control.layer)
+        if not self._control.uses_reference_image:
+            root.active_model.document.add_pose_character(self._control.layer)
 
     def _update_visibility(self):
         is_small = self.width() < 420
@@ -255,8 +296,12 @@ class ControlWidget(QWidget):
             self.generate_regions_tool_button.setVisible(
                 self._control.is_supported and is_segmentation and not is_small
             )
-            self.add_pose_button.setVisible(is_pose and is_small)
-            self.add_pose_tool_button.setVisible(is_pose and not is_small)
+            self.add_pose_button.setVisible(
+                is_pose and is_small and not self._control.uses_reference_image
+            )
+            self.add_pose_tool_button.setVisible(
+                is_pose and not is_small and not self._control.uses_reference_image
+            )
             self.range_label.setVisible(self._control.has_range)
             self.range_slider.setVisible(self._control.has_range)
             self.range_start_label.setVisible(self._control.has_range)
@@ -359,10 +404,25 @@ class ControlListWidget(QWidget):
         self._model = model
         self._widgets = []
         self._model_connections = []
+        self.setAcceptDrops(True)
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self._layout)
+
+    def dragEnterEvent(self, a0):
+        if a0 is not None and _droppable_images(a0.mimeData()):
+            a0.acceptProposedAction()
+
+    def dropEvent(self, a0):
+        if a0 is None:
+            return
+        model = root.active_model
+        for path in _droppable_images(a0.mimeData()):
+            if image := Image.load(path):
+                ref = model.add_reference_image(image, path.stem)
+                model.active_regions.control.add_reference(ref.id)
+        a0.acceptProposedAction()
 
     @property
     def model(self):
@@ -393,3 +453,12 @@ class ControlListWidget(QWidget):
         self._widgets.remove(widget)
         widget.disconnect_all()
         widget.deleteLater()
+
+
+def _droppable_images(data: QMimeData) -> list[Path]:
+    extensions = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+    return [
+        Path(url.toLocalFile())
+        for url in data.urls()
+        if url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in extensions
+    ]

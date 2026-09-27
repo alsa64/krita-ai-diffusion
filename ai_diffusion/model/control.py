@@ -24,6 +24,15 @@ if TYPE_CHECKING:
     from .model import DocumentModel
 
 
+class ReferenceImage:
+    """Standalone reference image, independent of document layers and their extent."""
+
+    def __init__(self, id: str, name: str, image: Image):
+        self.id = id
+        self.name = name
+        self.image = image
+
+
 class ControlLayer(QObject, ObservableProperties):
     max_preset_value = 4
     strength_multiplier = 50
@@ -32,6 +41,7 @@ class ControlLayer(QObject, ObservableProperties):
 
     mode = Property(ControlMode.reference, persist=True, setter="set_mode")
     layer_id = Property(QUuid(), persist=True)
+    ref_image_id = Property("", persist=True)  # set if bound to a reference image
     preset_value = Property(2, persist=True, setter="set_preset_value")
     strength = Property(50, persist=True)
     start = Property(0.0, persist=True)
@@ -46,6 +56,7 @@ class ControlLayer(QObject, ObservableProperties):
 
     mode_changed = pyqtSignal(ControlMode)
     layer_id_changed = pyqtSignal(QUuid)
+    ref_image_id_changed = pyqtSignal(str)
     preset_value_changed = pyqtSignal(int)
     strength_changed = pyqtSignal(int)
     start_changed = pyqtSignal(float)
@@ -86,13 +97,28 @@ class ControlLayer(QObject, ObservableProperties):
         model.edit_mode_changed.connect(self._update_is_supported)
         root.connection.state_changed.connect(self._update_is_supported)
         self.layer_id_changed.connect(self._update_is_pose_vector)
+        self.ref_image_id_changed.connect(self._update_is_pose_vector)
         model.jobs.job_finished.connect(self._update_active_job)
 
     @property
     def layer(self):
+        if self.ref_image_id:
+            raise PluginError("Control layer is bound to a reference image, not a layer")
         layer = self._model.layers.updated().find(self.layer_id)
         assert layer is not None, "Control layer has been deleted"
         return layer
+
+    @property
+    def uses_reference_image(self):
+        return bool(self.ref_image_id)
+
+    def set_source_layer(self, layer_id: QUuid):
+        self.ref_image_id = ""
+        self.layer_id = layer_id
+
+    def set_source_reference(self, ref_image_id: str):
+        self.layer_id = QUuid()
+        self.ref_image_id = ref_image_id
 
     def set_mode(self, mode: ControlMode):
         if mode != self.mode:
@@ -132,11 +158,41 @@ class ControlLayer(QObject, ObservableProperties):
         self._update_is_supported()
 
     def to_api(self, bounds: Bounds | None = None, time: int | None = None):
-        layer = self.layer
         if not self.is_supported:
-            raise PluginError(f"Can't use '{layer.name}' as control layer: {self.error_text}")
+            name = self.source_name
+            raise PluginError(f"Can't use '{name}' as control layer: {self.error_text}")
 
         extent = bounds.extent if bounds else self._model.document.extent
+        if self.ref_image_id:
+            image = self._to_api_reference(extent)
+        else:
+            image = self._to_api_layer(bounds, extent, time)
+
+        strength = self.strength / self.strength_multiplier
+        return ControlInput(self.mode, image, strength, (self.start, self.end))
+
+    @property
+    def source_name(self):
+        if ref := self._model.find_reference_image(self.ref_image_id):
+            return ref.name
+        return self.layer.name
+
+    def _to_api_reference(self, extent: Extent) -> Image:
+        ref = self._model.find_reference_image(self.ref_image_id)
+        if ref is None:
+            raise PluginError("Reference image used by control layer has been removed")
+        image = ref.image
+        if self.mode.is_ip_adapter:
+            if self._model.arch.supports_edit:
+                if image.extent.height > extent.height:
+                    w = (image.extent.width * extent.height) // image.extent.height
+                    image = Image.scale(image, Extent(w, extent.height))
+            else:
+                image = Image.scale(image, self.clip_vision_extent)
+        return image
+
+    def _to_api_layer(self, bounds: Bounds | None, extent: Extent, time: int | None) -> Image:
+        layer = self.layer
         if self.mode.is_ip_adapter and not layer.bounds.is_zero:
             bounds = None  # ignore mask bounds, use layer bounds
 
@@ -155,9 +211,7 @@ class ControlLayer(QObject, ObservableProperties):
                     image = Image.scale(image, Extent(w, extent.height))
             else:
                 image = Image.scale(image, self.clip_vision_extent)
-
-        strength = self.strength / self.strength_multiplier
-        return ControlInput(self.mode, image, strength, (self.start, self.end))
+        return image
 
     def generate_segmentation(self):
         assert self.mode is ControlMode.segmentation
@@ -273,6 +327,9 @@ class ControlLayer(QObject, ObservableProperties):
         self.can_generate = is_supported and self.mode.has_preprocessor
 
     def _update_is_pose_vector(self):
+        if self.ref_image_id:
+            self.is_pose_vector = False
+            return
         self.is_pose_vector = self.mode is ControlMode.pose and self.layer.type is LayerType.vector
 
     def _update_active_job(self):
@@ -311,6 +368,15 @@ class ControlLayerList(QObject):
         control.mode_changed.connect(self._update_last_mode)
         self._layers.append(control)
         self.added.emit(control)
+
+    def add_reference(self, ref_image_id: str):
+        """Add a control layer of type Reference bound to a standalone reference image."""
+        control = ControlLayer(self._model, ControlMode.reference, QUuid(), len(self._layers))
+        control.mode_changed.connect(self._update_last_mode)
+        control.set_source_reference(ref_image_id)
+        self._layers.append(control)
+        self.added.emit(control)
+        return control
 
     def emplace(self):
         self.add()

@@ -10,6 +10,7 @@ from krita import Document as MockKritaDocument
 from krita import Krita
 
 from ai_diffusion.backend.api import FillMode, InpaintMode
+from ai_diffusion.backend.resources import ControlMode
 from ai_diffusion.document import KritaDocument
 from ai_diffusion.image import Bounds, Extent, Image, ImageCollection
 from ai_diffusion.model.connection import Connection
@@ -170,6 +171,60 @@ async def test_sync(workflows_dir: Path):
     assert model2.upscale.upscaler == model1.upscale.upscaler
     assert model2.upscale.strength == pytest.approx(model1.upscale.strength)
     assert model2.upscale.use_diffusion == model1.upscale.use_diffusion
+
+
+@qtapp
+async def test_sync_reference_images(workflows_dir: Path):
+    """Standalone reference images and control layers bound to them survive a save/load cycle."""
+
+    from ai_diffusion.model.root import root as plugin_root
+
+    previous_connection = getattr(plugin_root, "_connection", None)
+    if previous_connection is None:
+        plugin_root._connection = Connection()
+
+    krita_doc = Krita.instance().openDocument("test")
+    model1 = _make_model(krita_doc, workflows_dir)
+    sync1 = ModelSync(model1)
+
+    ref_image = Image.create(Extent(320, 200), fill=0xFF00FF00)
+    ref = model1.add_reference_image(ref_image, "my-reference")
+    control = model1.regions.control.add_reference(ref.id)
+    sync1._save()
+
+    # ── restore ──────────────────────────────────────────────────────
+    Krita.instance().setActiveDocument(krita_doc)
+    doc2 = KritaDocument(krita_doc, None)
+    conn2 = Connection()
+    wf_coll2 = WorkflowCollection(conn2, folder=workflows_dir)
+    model2 = DocumentModel(doc2, conn2, wf_coll2)
+    _sync2 = ModelSync(model2)
+
+    assert len(model2.reference_images) == 1
+    restored = model2.reference_images[0]
+    assert restored.id == ref.id
+    assert restored.name == "my-reference"
+    assert restored.image.extent == Extent(320, 200)
+    assert Image.compare(restored.image, ref_image) < 0.01
+
+    assert len(model2.regions.control) == 1
+    restored_control = model2.regions.control[0]
+    assert restored_control.ref_image_id == ref.id
+    assert restored_control.uses_reference_image
+    assert restored_control.mode is ControlMode.reference
+    assert control.uses_reference_image
+
+    # Removing the reference removes the bound control layer and its annotation
+    model2.remove_reference_image(ref.id)
+    sync2 = _sync2
+    sync2._save()
+    assert len(model2.regions.control) == 0
+    assert doc2.find_annotation("ui.json") is not None
+    for fmt in ("webp", "png"):
+        assert doc2.find_annotation(f"reference-{ref.id}.{fmt}") is None
+
+    if previous_connection is None:
+        del plugin_root._connection
 
 
 # ---------------------------------------------------------------------------

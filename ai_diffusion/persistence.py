@@ -14,9 +14,9 @@ from PyQt6.QtWidgets import QMessageBox
 from . import eventloop
 from .backend.api import FillMode, InpaintMode
 from .defaults import defaults
-from .image import Image, ImageCollection
+from .image import Image, ImageCollection, qt_supports_webp
 from .localization import translate as _
-from .model.control import ControlLayer, ControlLayerList
+from .model.control import ControlLayer, ControlLayerList, ReferenceImage
 from .model.custom_workflow import CustomGenerationMode, CustomWorkspace
 from .model.jobs import Job, JobKind, JobParams, JobQueue
 from .model.model import (
@@ -420,6 +420,7 @@ class ModelSync:
         self._memory_used: dict[int, int] = {}  # slot -> memory used for images in bytes
         self._slot_index = 0
         self._last_change = 0
+        self._annotated_references: set[str] = set()
         self._save_task: asyncio.Task | None = None
         self._image_task: asyncio.Future | None = None
         if state_bytes := _find_annotation(model.document, "ui.json"):
@@ -456,13 +457,40 @@ class ModelSync:
         for region in model.regions:
             state["regions"].append(_serialize(region))
             state["regions"][-1]["control"] = [_serialize(c) for c in region.control]
+        state["references"] = [
+            {"id": r.id, "name": r.name, "width": r.image.width, "height": r.image.height}
+            for r in model.reference_images
+        ]
         state_str = json.dumps(state, indent=2, default=encode_json)
         state_bytes = QByteArray(state_str.encode("utf-8"))
         model.document.annotate("ui.json", state_bytes)
+        for ref in model.reference_images:
+            if ref.id not in self._annotated_references:
+                fmt = (
+                    ImageFileFormat.webp
+                    if qt_supports_webp(ref.image.extent)
+                    else (ImageFileFormat.png)
+                )
+                model.document.annotate(f"reference-{ref.id}.{fmt.name}", ref.image.to_bytes(fmt))
+                self._annotated_references.add(ref.id)
 
     def _load(self, model: DocumentModel, state_bytes: bytes):
         state = json.loads(state_bytes.decode("utf-8"))
         model.try_set_preview_layer(state.get("preview_layer", ""))
+        for ref_state in state.get("references", []):
+            ref_id = ref_state.get("id", "")
+            for fmt in (ImageFileFormat.webp, ImageFileFormat.png):
+                if image_bytes := _find_annotation(
+                    model.document, f"reference-{ref_id}.{fmt.name}"
+                ):
+                    image = Image.from_bytes(image_bytes.data())
+                    model._reference_images.append(
+                        ReferenceImage(ref_id, ref_state.get("name", ""), image)
+                    )
+                    self._annotated_references.add(ref_id)
+                    break
+            else:
+                log.warning(f"Failed to load reference image {ref_id} from document annotation")
         _deserialize(model, state)
         _deserialize(model.inpaint, state.get("inpaint", {}))
         _deserialize(model.upscale, state.get("upscale", {}))
@@ -503,8 +531,18 @@ class ModelSync:
         model.jobs.result_discarded.connect(self._remove_image)
         model.jobs.result_used.connect(self._save_later)
         model.jobs.selection_changed.connect(self._save_later)
+        model.reference_images_changed.connect(self._on_references_changed)
         self._track_regions(model.regions)
         self._track_regions(model.edit_regions)
+
+    def _on_references_changed(self):
+        model = self._model
+        existing = {r.id for r in model.reference_images}
+        for ref_id in [i for i in self._annotated_references if i not in existing]:
+            for fmt in (ImageFileFormat.webp, ImageFileFormat.png):
+                model.document.remove_annotation(f"reference-{ref_id}.{fmt.name}")
+            self._annotated_references.remove(ref_id)
+        self._save_later()
 
     def _track_control(self, control: ControlLayer):
         self._save()

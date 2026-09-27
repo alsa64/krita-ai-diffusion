@@ -65,7 +65,7 @@ from ..text import create_ai_generated_xmp, create_img_metadata, extract_layers
 from ..util import PluginError, clamp, ensure, is_one, trim_text, unique
 from ..util import client_logger as log
 from .connection import Connection, ConnectionState
-from .control import ControlLayer
+from .control import ControlLayer, ReferenceImage
 from .custom_workflow import (
     CustomGenerationMode,
     CustomWorkspace,
@@ -174,12 +174,14 @@ class DocumentModel(QObject, ObservableProperties):
     progress_changed = pyqtSignal(float)
     error_changed = pyqtSignal(Error)
     modified = pyqtSignal(QObject, str)
+    reference_images_changed = pyqtSignal()
 
     def __init__(self, document: Document, connection: Connection, workflows: WorkflowCollection):
         super().__init__()
         self._doc = document
         self._connection = connection
         self._layer: Layer | None = None
+        self._reference_images: list[ReferenceImage] = []
         self.generate_seed()
         self.jobs = JobQueue()
         self.regions = RootRegion(self)
@@ -652,7 +654,9 @@ class DocumentModel(QObject, ObservableProperties):
         exclude = []
         if exclude_internal:
             exclude = [  # exclude control layers from projection
-                c.layer for c in self.regions.control if not c.mode.is_part_of_image
+                c.layer
+                for c in self.regions.control
+                if not c.mode.is_part_of_image and not c.uses_reference_image
             ]
             if self._layer:  # exclude preview layer
                 exclude.append(self._layer)
@@ -1131,6 +1135,30 @@ class DocumentModel(QObject, ObservableProperties):
     def active_regions(self):
         is_edit = self.workspace in (Workspace.generation, Workspace.live) and self.edit_mode
         return self.edit_regions if is_edit else self.regions
+
+    @property
+    def reference_images(self):
+        return self._reference_images
+
+    def find_reference_image(self, id: str):
+        return next((r for r in self._reference_images if r.id == id), None)
+
+    def add_reference_image(self, image: Image, name: str):
+        ref = ReferenceImage(uuid.uuid4().hex, name, image)
+        self._reference_images.append(ref)
+        self.reference_images_changed.emit()
+        return ref
+
+    def remove_reference_image(self, id: str):
+        if ref := self.find_reference_image(id):
+            self._reference_images.remove(ref)
+        for region_root in (self.regions, self.edit_regions):
+            for control in [c for c in region_root.control if c.ref_image_id == id]:
+                region_root.control.remove(control)
+            for region in region_root:
+                for control in [c for c in region.control if c.ref_image_id == id]:
+                    region.control.remove(control)
+        self.reference_images_changed.emit()
 
     @property
     def active_style(self):

@@ -102,7 +102,7 @@ class JobParams:
             {
                 "mode": c.mode.text,
                 "strength": c.strength / c.strength_multiplier,
-                "image": c.layer.name,
+                "image": c.source_name,
                 "start": c.start,
                 "end": c.end,
             }

@@ -149,6 +149,81 @@ async def test_generate_simple(workflows_dir: Path):
 
 
 @qtapp
+async def test_generate_standalone_reference_images(workflows_dir: Path):
+    """Reference images added as standalone files are passed to the workflow as control images,
+    independent of document layers, and are not excluded from the input image."""
+
+    krita_doc = Krita.instance().openDocument("test")
+
+    async with _model_env(krita_doc, workflows_dir) as (model, client):
+        client.models.checkpoints["test_qwen21.safetensors"] = CheckpointInfo(
+            "test_qwen21.safetensors", Arch.qwen2
+        )
+        model.style = _make_style("test_qwen21.safetensors")
+        model.strength = 1.0
+
+        # Reference with a different aspect ratio than the document, not taller than it
+        ref_image = Image.create(Extent(640, 256), fill=Qt.GlobalColor.yellow)
+        ref = model.add_reference_image(ref_image, "my-reference")
+        assert model.find_reference_image(ref.id) is ref
+
+        control = model.regions.control.add_reference(ref.id)
+        assert control.mode is ControlMode.reference
+        assert control.uses_reference_image
+
+        model.regions.positive = "a red cat like <image2>"
+        model.generate()
+
+        result = await _wait_for_enqueue(client)
+        cond = result[0].conditioning
+        assert cond is not None
+        assert len(cond.control) == 1
+        assert cond.control[0].mode is ControlMode.reference
+        assert cond.control[0].image is not None
+        assert cond.control[0].image.extent == Extent(640, 256)
+        assert Image.compare(cond.control[0].image, ref_image) < 0.01
+
+
+@qtapp
+async def test_standalone_reference_image_scaled(workflows_dir: Path):
+    """Reference images taller than the document are scaled down to the document height."""
+
+    krita_doc = Krita.instance().openDocument("test")
+
+    async with _model_env(krita_doc, workflows_dir) as (model, client):
+        client.models.checkpoints["test_qwen21.safetensors"] = CheckpointInfo(
+            "test_qwen21.safetensors", Arch.qwen2
+        )
+        model.style = _make_style("test_qwen21.safetensors")
+
+        ref_image = Image.create(Extent(512, 1024), fill=Qt.GlobalColor.magenta)
+        ref = model.add_reference_image(ref_image, "tall-reference")
+        model.regions.control.add_reference(ref.id)
+        model.generate()
+
+        result = await _wait_for_enqueue(client)
+        cond = result[0].conditioning
+        assert cond is not None
+        assert cond.control[0].image is not None
+        assert cond.control[0].image.extent == Extent(256, 512)
+
+
+@qtapp
+async def test_remove_reference_image_removes_control(workflows_dir: Path):
+    krita_doc = Krita.instance().openDocument("test")
+
+    async with _model_env(krita_doc, workflows_dir) as (model, _client):
+        await asyncio.sleep(0)  # let _handle_messages task start before disconnect
+        ref = model.add_reference_image(Image.create(Extent(64, 64)), "ref")
+        control = model.regions.control.add_reference(ref.id)
+
+        model.remove_reference_image(ref.id)
+
+        assert model.find_reference_image(ref.id) is None
+        assert control not in list(model.regions.control)
+
+
+@qtapp
 async def test_generate_references(workflows_dir: Path):
     krita_doc = Krita.instance().openDocument("test")
 
