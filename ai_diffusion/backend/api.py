@@ -287,6 +287,10 @@ class Serializer:
         serializer = Serializer()
         result = serializer._object(work)
         if image_format and len(serializer._images) > 0:
+            if image_format is ImageFileFormat.webp and any(
+                image.has_alpha for image in serializer._images
+            ):
+                image_format = ImageFileFormat.png
             blob, offsets = serializer._images.to_bytes(image_format)
             assert blob.size() > 0, "Image data is empty"
             result["image_data"] = {"bytes": blob.data(), "offsets": offsets}

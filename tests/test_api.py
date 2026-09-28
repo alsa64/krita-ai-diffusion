@@ -64,6 +64,25 @@ def test_serialize():
     assert result == input
 
 
+def test_serialize_preserves_alpha_with_default_format():
+    image = Image.create(Extent(2, 2), Qt.GlobalColor.transparent)
+    image.set_pixel(0, 0, (255, 0, 0, 255))
+    image.set_pixel(1, 0, (10, 20, 30, 0))
+    input = WorkflowInput(
+        WorkflowKind.refine,
+        images=ImageInput(
+            ExtentInput(Extent(2, 2), Extent(2, 2), Extent(2, 2), Extent(2, 2)),
+            initial_image=image,
+        ),
+    )
+
+    result = WorkflowInput.from_dict(input.to_dict())
+
+    assert result.images is not None and result.images.initial_image is not None
+    assert result.images.initial_image.pixel(0, 0) == (255, 0, 0, 255)
+    assert result.images.initial_image.pixel(1, 0) == (10, 20, 30, 0)
+
+
 def test_deserialize_list_default():
     input = WorkflowInput(WorkflowKind.generate)
     input.images = ImageInput(ExtentInput(Extent(1, 1), Extent(2, 2), Extent(3, 3), Extent(4, 4)))

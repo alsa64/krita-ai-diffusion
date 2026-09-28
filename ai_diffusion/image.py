@@ -385,6 +385,10 @@ class Image:
         ]
 
     @property
+    def has_alpha(self):
+        return self._qimage.hasAlphaChannel()
+
+    @property
     def is_mask(self):
         return self._qimage.format() == QImage.Format.Format_Grayscale8
 
