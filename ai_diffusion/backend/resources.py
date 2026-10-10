@@ -88,7 +88,7 @@ class Arch(Enum):
     qwen_e = "Qwen Edit"
     qwen_e_p = "Qwen Edit Plus"
     qwen_l = "Qwen Layered"
-    qwen2 = "Qwen 2"
+    qwen2 = "Qwen 2.1"
     anima = "Anima"
     zimage = "Z-Image"
     ernie = "ERNIE Image"
@@ -99,7 +99,7 @@ class Arch(Enum):
 
     @staticmethod
     def from_string(string: str, model_type: str = "eps", filename: str | None = None):
-        filename = filename.lower() if filename else ""
+        filename = filename.lower().replace("-", "_") if filename else ""
         if string == "sd15":
             return Arch.sd15
         if string == "sdxl" and model_type == "v-prediction":
@@ -131,7 +131,7 @@ class Arch(Enum):
             return Arch.qwen_l
         if string == "qwen-image":
             return Arch.qwen
-        if string == "qwen-image21":
+        if string == "qwen-image21" or "qwen_image21" in filename or "qwen_image_2.1" in filename:
             return Arch.qwen2
         if string == "anima" or (string == "unknown" and "anima" in filename):
             return Arch.anima

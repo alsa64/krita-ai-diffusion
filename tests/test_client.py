@@ -96,6 +96,25 @@ def test_comfy_model_hash_discovery():
     assert client.models.vae_hashes == {"my-vae.safetensors": "h3"}
 
 
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "qwen-image21_int8_convrot.safetensors",
+        "qwen-image21-noctQUncensoredRealism4int8.safetensors",
+        "qwen_image_2.1_int8_convrot.safetensors",
+    ],
+)
+def test_qwen_image_21_model_discovery(filename):
+    client = ComfyClient("http://example.com")
+    client._refresh_models(
+        comfy_client_module.ComfyObjectInfo({}),
+        None,
+        {filename: {"base_model": "unknown"}},
+    )
+
+    assert client.models.checkpoints[filename].arch is Arch.qwen2
+
+
 def make_default_work(size=512, steps=20):
     return WorkflowInput(
         WorkflowKind.generate,
