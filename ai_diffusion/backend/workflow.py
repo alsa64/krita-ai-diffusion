@@ -1459,8 +1459,8 @@ def upscale_with_model_tiled(
     model_name: str,
     tile_size: int,
     tile_overlap: int,
+    multiple: int,
 ):
-    multiple = resolution.diffusion_multiple
     min_size = multiple_of(tile_size, multiple)
     layout = TileLayout(extent.input, min_size, tile_overlap, multiple)
     tile_layout = w.create_tile_layout(
@@ -1511,6 +1511,7 @@ def upscale_tiled(
             upscale.model,
             settings.upscale_model_tile_size,
             settings.upscale_model_tile_overlap,
+            multiple,
         )
     else:
         upscaled = in_image
