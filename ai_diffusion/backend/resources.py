@@ -93,6 +93,8 @@ class Arch(Enum):
     zimage = "Z-Image"
     ernie = "ERNIE Image"
     krea2 = "Krea 2"
+    moss = "MOSS Image"
+    moss_e = "MOSS Image Edit"
 
     auto = "Automatic"
     all = "All"
@@ -141,6 +143,10 @@ class Arch(Enum):
             return Arch.ernie
         if string == "krea2":
             return Arch.krea2
+        if string in {"moss", "moss_image", "moss-image"} or (
+            string == "unknown" and "moss" in filename
+        ):
+            return Arch.moss
         return None
 
     @staticmethod
@@ -162,6 +168,7 @@ class Arch(Enum):
             or (a.is_sdxl_like and b.is_sdxl_like)
             or (a.is_flux_like and b.is_flux_like)
             or (a.is_qwen_like and b.is_qwen_like)
+            or (a.is_moss_like and b.is_moss_like)
         )
 
     def matches(self, checkpoint: str):
@@ -204,7 +211,7 @@ class Arch(Enum):
 
     @property
     def is_edit(self):  # edit models make changes to input images
-        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l]
+        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.moss_e]
 
     @property
     def supports_edit(self):  # includes text-to-image models that can also edit
@@ -226,6 +233,10 @@ class Arch(Enum):
     @property
     def is_qwen_like(self):
         return self in [Arch.qwen, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l]
+
+    @property
+    def is_moss_like(self):
+        return self in [Arch.moss, Arch.moss_e]
 
     @property
     def text_encoders(self):
@@ -256,6 +267,8 @@ class Arch(Enum):
                 return ["ministral"]
             case Arch.krea2:
                 return ["qwen_3vl_4b"]
+            case Arch.moss | Arch.moss_e:
+                return ["qwen_3_5_9b"]
             case _:
                 raise ValueError(f"Unsupported architecture: {self}")
 
@@ -281,6 +294,8 @@ class Arch(Enum):
             Arch.zimage,
             Arch.ernie,
             Arch.krea2,
+            Arch.moss,
+            Arch.moss_e,
         ]
 
 
@@ -829,6 +844,7 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.text_encoder, Arch.all, "ministral"): ["ministral-3-3b", "ministral"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_4b"): ["qwen3vl_4b", "qwen_3vl_4b", "qwen3-vl-4b"],
     resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3vl_8b"): ["qwen3vl_8b", "qwen_3vl_8b", "qwen3-vl-8b"],
+    resource_id(ResourceKind.text_encoder, Arch.all, "qwen_3_5_9b"): ["qwen3.5_9b", "qwen3_5_9b", "qwen3-5-9b", "qwen_3_5_9b"],
     resource_id(ResourceKind.vae, Arch.sd15, "default"): ["vae-ft-mse-840000-ema"],
     resource_id(ResourceKind.vae, Arch.sdxl, "default"): ["sdxl_vae"],
     resource_id(ResourceKind.vae, Arch.illu, "default"): ["sdxl_vae"],
@@ -848,6 +864,8 @@ search_paths: dict[str, list[str]] = {
     resource_id(ResourceKind.vae, Arch.zimage, "default"): ["z-image", "flux-", "flux_", "flux/", "flux1", "ae.s"],
     resource_id(ResourceKind.vae, Arch.ernie, "default"): ["flux2"],
     resource_id(ResourceKind.vae, Arch.krea2, "default"): ["qwen_image"],
+    resource_id(ResourceKind.vae, Arch.moss, "default"): ["flux2"],
+    resource_id(ResourceKind.vae, Arch.moss_e, "default"): ["flux2"],
 }
 # fmt: on
 
@@ -887,6 +905,10 @@ required_resource_ids = {
     ResourceId(ResourceKind.vae, Arch.ernie, "default"),
     ResourceId(ResourceKind.text_encoder, Arch.krea2, "qwen_3vl_4b"),
     ResourceId(ResourceKind.vae, Arch.krea2, "default"),
+    ResourceId(ResourceKind.text_encoder, Arch.moss, "qwen_3_5_9b"),
+    ResourceId(ResourceKind.text_encoder, Arch.moss_e, "qwen_3_5_9b"),
+    ResourceId(ResourceKind.vae, Arch.moss, "default"),
+    ResourceId(ResourceKind.vae, Arch.moss_e, "default"),
 }
 
 recommended_resource_ids = [

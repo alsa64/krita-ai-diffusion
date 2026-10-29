@@ -170,6 +170,8 @@ def load_checkpoint_with_lora(w: ComfyWorkflow, checkpoint: CheckpointInput, mod
                 clip = w.load_clip(te["qwen_3vl_4b"], type="krea2")
             case Arch.qwen2:
                 clip = w.load_clip(te["qwen_3vl_8b"], type="qwen_image")
+            case Arch.moss | Arch.moss_e:
+                clip = w.load_clip(te["qwen_3_5_9b"], type="moss_image")
             case _:
                 raise RuntimeError(f"No text encoder for model architecture {arch.name}")
 
@@ -547,6 +549,11 @@ def encode_prompt(
             negative = cond.negative.prepare(w) if cond.negative else ""
             prompt = w.text_encode_qwen2(clip.model, vae, ref_images, positive, negative)
             return prompt, None  # note: latent returned by this node is always noise/empty
+        if arch is Arch.moss_e and len(ref_images) > 0:
+            positive = cond.positive.prepare(w, cond.style_prompt)
+            negative = cond.negative.prepare(w) if cond.negative else ""
+            prompt = w.text_encode_moss_image_edit(clip.model, vae, ref_images, positive, negative)
+            return prompt, None
         else:
             positive = cond.positive.encode(w, clip, cond.style_prompt, ref_images)
             negative = cond.negative.encode(w, clip) if cond.negative else positive

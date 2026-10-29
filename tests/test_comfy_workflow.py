@@ -3,7 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo, ComfyWorkflow
+from ai_diffusion.backend.comfy_workflow import ComfyObjectInfo, ComfyWorkflow, Output
+from ai_diffusion.backend.resolution import diffusion_multiple
+from ai_diffusion.backend.resources import Arch
+from ai_diffusion.image import Extent
 
 
 @pytest.fixture(scope="module")
@@ -112,6 +115,40 @@ def test_defaults_legacy_combo(info: ComfyObjectInfo):
     assert inputs["images"] == "img"
     assert inputs["format"] == "PNG"
     assert set(inputs.keys()) == {"images", "format"}
+
+
+def test_text_encode_moss_image_edit():
+    w = ComfyWorkflow()
+    images = [Output(1, 0), Output(1, 1)]
+    prompt = w.text_encode_moss_image_edit(
+        Output(2, 0), Output(3, 0), images, "add a hat", "blurry"
+    )
+
+    positive, negative = w.find("TextEncodeMOSSImageEdit")
+    expected = {
+        "clip": Output(2, 0),
+        "vae": Output(3, 0),
+        "edit_format": "Moss-Image-Edit",
+        "images.image_0": Output(1, 0),
+        "images.image_1": Output(1, 1),
+    }
+    assert positive.inputs == {**expected, "prompt": "add a hat"}
+    assert negative.inputs == {**expected, "prompt": "blurry"}
+    assert prompt.positive == positive.output(0)
+    assert prompt.negative == negative.output(0)
+
+
+def test_moss_uses_flux2_empty_latent():
+    w = ComfyWorkflow()
+    w.empty_latent_image(Extent(1024, 1024), Arch.moss)
+    w.empty_latent_image(Extent(1024, 1024), Arch.moss_e)
+    assert len(list(w.find("EmptyFlux2LatentImage"))) == 2
+
+
+def test_moss_needs_multiple_of_16():
+    # the Flux 2 VAE downscales by 16 and the model has no extra patch size
+    assert diffusion_multiple(Arch.moss) == 16
+    assert diffusion_multiple(Arch.moss_e) == 16
 
 
 def test_load_seedvr2_dit_places_cached_model_on_cuda_with_cpu_offload():

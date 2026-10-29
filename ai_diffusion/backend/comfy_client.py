@@ -809,6 +809,7 @@ def _find_text_encoder_models(model_list: Sequence[str]):
         "qwen_3vl_4b",
         "qwen_3vl_8b",
         "ministral",
+        "qwen_3_5_9b",
     ]
     return {
         resource_id(kind, Arch.all, te): _find_model(model_list, kind, Arch.all, te) for te in tes

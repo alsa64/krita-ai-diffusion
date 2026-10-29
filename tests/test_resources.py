@@ -44,6 +44,25 @@ def test_same_name_same_model():
                 assert all(mf.url == of.url for mf, of in zip(m.files, o.files))
 
 
+def test_moss_arch_detection():
+    # the server does not report a base model for MOSS, so the filename is the fallback
+    assert Arch.from_string("moss") is Arch.moss
+    assert Arch.from_string("moss_image") is Arch.moss
+    assert Arch.from_string("unknown", filename="moss_image_sft_bf16.safetensors") is Arch.moss
+    assert (
+        Arch.from_string("unknown", filename="qwen_image_edit_2511_bf16.safetensors")
+        is not Arch.moss
+    )
+    # both MOSS variants are compatible, so an edit style can be used with a text-to-image checkpoint
+    assert Arch.is_compatible(Arch.moss_e, Arch.moss)
+    assert Arch.is_compatible(Arch.moss, Arch.moss_e)
+    assert not Arch.is_compatible(Arch.moss, Arch.qwen)
+    assert Arch.moss_e.is_edit
+    assert Arch.moss.supports_edit is False
+    assert Arch.moss.text_encoders == ["qwen_3_5_9b"]
+    assert Arch.moss_e.text_encoders == ["qwen_3_5_9b"]
+
+
 def test_resource_ids_exist():
     ids = chain(res.required_resource_ids, res.recommended_resource_ids)
     for resource_id in ids:
@@ -57,6 +76,8 @@ def test_resource_ids_exist():
             Arch.anima,
             Arch.ernie,
             Arch.krea2,
+            Arch.moss,
+            Arch.moss_e,
         ):
             continue  # no model downloads yet
         model = res.find_resource(resource_id)

@@ -665,7 +665,7 @@ class ComfyWorkflow:
         w, h = extent.width, extent.height
         if arch.is_flux_like or arch.is_qwen_like or arch in (Arch.sd3, Arch.chroma, Arch.zimage):
             return self.add("EmptySD3LatentImage", 1, width=w, height=h, batch_size=batch_size)
-        if arch.is_flux2 or arch is Arch.ernie:
+        if arch.is_flux2 or arch is Arch.ernie or arch.is_moss_like:
             return self.add("EmptyFlux2LatentImage", 1, width=w, height=h, batch_size=batch_size)
         else:
             return self.add("EmptyLatentImage", 1, width=w, height=h, batch_size=batch_size)
@@ -793,6 +793,24 @@ class ComfyWorkflow:
         for i, image in enumerate(images):
             args[f"images.image_{i + 1}"] = image
         positive, negative, _ = self.add("TextEncodeQwenImage21", 3, **args)
+        return ConditioningOutput(positive, negative)
+
+    def text_encode_moss_image_edit(
+        self,
+        clip: Output,
+        vae: Output | None,
+        images: list[Output],
+        positive: str | Output,
+        negative: str | Output,
+    ):
+        assert len(images) > 0, "MOSS Image Edit requires at least one reference image"
+        assert len(images) <= 10, "MOSS Image Edit supports a maximum of 10 reference images"
+        edit_format = "Moss-Image-Edit"  # references are not seen by the text encoder
+        args = {"clip": clip, "vae": vae, "edit_format": edit_format}
+        for i, image in enumerate(images):
+            args[f"images.image_{i}"] = image
+        positive = self.add("TextEncodeMOSSImageEdit", 1, prompt=positive, **args)
+        negative = self.add("TextEncodeMOSSImageEdit", 1, prompt=negative, **args)
         return ConditioningOutput(positive, negative)
 
     def background_region(self, conditioning: Output):

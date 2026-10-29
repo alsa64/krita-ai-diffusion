@@ -23,7 +23,13 @@ from ai_diffusion.backend.api import (
     WorkflowInput,
     WorkflowKind,
 )
-from ai_diffusion.backend.client import CheckpointInfo, Client, ClientEvent, ClientModels
+from ai_diffusion.backend.client import (
+    CheckpointInfo,
+    Client,
+    ClientEvent,
+    ClientModels,
+    FileFormat,
+)
 from ai_diffusion.backend.cloud_client import CloudClient
 from ai_diffusion.backend.comfy_client import ComfyClient
 from ai_diffusion.backend.comfy_workflow import ComfyWorkflow
@@ -313,6 +319,60 @@ def test_anima_lllite_control_workflow():
     assert w.root[str(model.node - 1)]["inputs"]["weights"] == "anima-lllite-anytest.safetensors"
     assert any(n["class_type"] == "ETN_control_load" for n in w.root.values())
     assert not any(n["class_type"] == "ControlNetLoader" for n in w.root.values())
+
+
+def test_moss_edit_uses_edit_encoder():
+    w = ComfyWorkflow()
+    clip = workflow.Clip(workflow.Output(1, 0), Arch.moss_e)
+    image = workflow.ImageOutput(Image.create(Extent(64, 64)))
+    cond = workflow.Conditioning(
+        workflow.TextPrompt("add a hat", ""),
+        workflow.TextPrompt("blurry", ""),
+        edit_reference=True,
+    )
+
+    prompt, latent = workflow.encode_prompt(
+        w, cond, clip, workflow.Output(2, 0), None, image.load(w)
+    )
+
+    assert latent is None
+    nodes = list(w.find("TextEncodeMOSSImageEdit"))
+    assert len(nodes) == 2
+    assert not any(n["class_type"] == "ReferenceLatent" for n in w.root.values())
+    assert nodes[0].inputs["prompt"] == "add a hat"
+    assert nodes[1].inputs["prompt"] == "blurry"
+    assert prompt.positive == nodes[0].output(0)
+    assert prompt.negative == nodes[1].output(0)
+
+
+def test_moss_edit_without_reference_uses_text_encoder():
+    w = ComfyWorkflow()
+    clip = workflow.Clip(workflow.Output(1, 0), Arch.moss_e)
+    cond = workflow.Conditioning(workflow.TextPrompt("a forest", ""), None)
+
+    _prompt, _ = workflow.encode_prompt(w, cond, clip, workflow.Output(2, 0), None)
+
+    assert not any(n["class_type"] == "TextEncodeMOSSImageEdit" for n in w.root.values())
+    assert any(n["class_type"] == "CLIPTextEncode" for n in w.root.values())
+
+
+def test_moss_loads_text_encoder_with_moss_type():
+    w = ComfyWorkflow()
+    models = ClientModels()
+    models.checkpoints["moss_image_sft_bf16.safetensors"] = CheckpointInfo(
+        "moss_image_sft_bf16.safetensors", Arch.moss, FileFormat.diffusion
+    )
+    models.resources[resource_id(ResourceKind.text_encoder, Arch.moss, "qwen_3_5_9b")] = (
+        "qwen3.5_9b_bf16.safetensors"
+    )
+    models.resources[resource_id(ResourceKind.vae, Arch.moss, "default")] = "flux2-vae.safetensors"
+    checkpoint = CheckpointInput("moss_image_sft_bf16.safetensors", version=Arch.moss)
+
+    workflow.load_checkpoint_with_lora(w, checkpoint, models)
+
+    [clip] = w.find("CLIPLoader")
+    assert clip.inputs["clip_name"] == "qwen3.5_9b_bf16.safetensors"
+    assert clip.inputs["type"] == "moss_image"
 
 
 def test_dynamic_cache_qwen2():

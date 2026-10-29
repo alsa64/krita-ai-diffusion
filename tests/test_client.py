@@ -15,7 +15,13 @@ from ai_diffusion.backend.api import (
     WorkflowInput,
     WorkflowKind,
 )
-from ai_diffusion.backend.client import ClientEvent, ClientModels, User, resolve_arch
+from ai_diffusion.backend.client import (
+    CheckpointInfo,
+    ClientEvent,
+    ClientModels,
+    User,
+    resolve_arch,
+)
 from ai_diffusion.backend.cloud_client import CloudClient, JobInfo
 from ai_diffusion.backend.comfy_client import ComfyClient, parse_url, websocket_args, websocket_url
 from ai_diffusion.backend.network import NetworkError, RequestManager
@@ -26,7 +32,7 @@ from ai_diffusion.image import Extent
 from ai_diffusion.model.connection import Connection
 from ai_diffusion.platform_tools import get_cuda_devices
 from ai_diffusion.settings import ServerMode, settings
-from ai_diffusion.style import Arch, Style
+from ai_diffusion.style import Arch, Style, Styles
 from ai_diffusion.util import ensure
 
 from .config import default_checkpoint, server_dir
@@ -430,6 +436,22 @@ async def test_cloud_generate_uses_configured_job_poll_interval(monkeypatch):
     assert job.worker_id == "worker"
     assert job.output == {"images": {"offsets": [0, 1], "base64": "AA=="}}
     assert sleeps == [1.75, 1.75]
+
+
+def test_moss_styles():
+    models = ClientModels()
+    models.checkpoints["moss_image_sft_bf16.safetensors"] = CheckpointInfo(
+        "moss_image_sft_bf16.safetensors", Arch.moss
+    )
+    styles = Styles.list()
+    moss = styles.find("built-in/moss.json")
+    moss_edit = styles.find("built-in/moss-edit.json")
+    assert moss is not None and moss_edit is not None
+    assert resolve_arch(moss, models) == Arch.moss
+    assert resolve_arch(moss_edit, models) == Arch.moss_e
+    assert [lora.name for lora in moss_edit.get_models(models.checkpoints).loras] == [
+        "moss_image_edit_lora_rank_64_bf16.safetensors"
+    ]
 
 
 def check_resolve_sd_version(client: ComfyClient, arch: Arch):
