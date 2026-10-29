@@ -111,6 +111,7 @@ class Connection(QObject, ObservableProperties):
 
             self._client = client
             await metadata_store.sync(client)
+            await metadata_store.sync_headers(client)
             if self._task is None:
                 self._task = eventloop._loop.create_task(self._handle_messages())
             self.state = ConnectionState.connected

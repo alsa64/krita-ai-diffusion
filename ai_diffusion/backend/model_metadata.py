@@ -94,25 +94,86 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _first(header: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = header.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _arch_from_header(header: dict[str, str]) -> str:
+    for value in (
+        _first(header, "modelspec.architecture"),
+        _first(header, "ss_base_model_version"),
+        _first(header, "ss_sd_model_name"),
+    ):
+        name = value.lower().replace("-", "_").replace(" ", "_")
+        if not name:
+            continue
+        arch = Arch.from_string(name)
+        if arch is not None:
+            return arch.name
+        for keyword, keyword_arch in header_arch_keywords:
+            if keyword in name:
+                return keyword_arch.name
+    return ""
+
+
+header_arch_keywords = [
+    ("illustrious", Arch.illu),
+    ("noobai", Arch.illu),
+    ("pony", Arch.sdxl),
+    ("sdxl", Arch.sdxl),
+    ("sd3", Arch.sd3),
+    ("sd_v3", Arch.sd3),
+    ("flux_2", Arch.flux2_4b),
+    ("flux2", Arch.flux2_4b),
+    ("flux", Arch.flux),
+    ("qwen_image_edit", Arch.qwen_e),
+    ("qwen_image", Arch.qwen),
+    ("qwen", Arch.qwen),
+    ("moss", Arch.moss),
+    ("z_image", Arch.zimage),
+    ("zimage", Arch.zimage),
+    ("anima", Arch.anima),
+    ("chroma", Arch.chroma),
+    ("sd_v1", Arch.sd15),
+    ("sd_1", Arch.sd15),
+    ("sd15", Arch.sd15),
+]
+
+
+def _triggers_from_header(header: dict[str, str]) -> list[str]:
+    value = _first(header, "modelspec.trigger_phrase", "ss_trigger_words")
+    return [t.strip() for t in value.split(",") if t.strip()]
+
+
 class ModelMetadataStore:
     def __init__(self, path: Path | None = None):
         self._cache: dict[str, dict[str, Any]] = {}
+        self._headers: dict[str, dict[str, str]] = {}
         self._client: Client | None = None
         self._path = path or util.user_data_dir / "model_metadata.json"
+        self._header_path = self._path.with_name("model_headers.json")
         self._load()
 
     def _load(self):
         try:
             if self._path.exists():
                 self._cache = json.loads(self._path.read_text(encoding="utf-8"))
+            if self._header_path.exists():
+                self._headers = json.loads(self._header_path.read_text(encoding="utf-8"))
         except Exception as e:
             log.warning(f"Failed to read model metadata cache: {e!s}")
             self._cache = {}
+            self._headers = {}
 
     def _save(self):
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(json.dumps(self._cache, indent=2), encoding="utf-8")
+            self._header_path.write_text(json.dumps(self._headers, indent=2), encoding="utf-8")
         except Exception as e:
             log.warning(f"Failed to write model metadata cache: {e!s}")
 
@@ -122,7 +183,27 @@ class ModelMetadataStore:
         return f"{folder}/{filename}"
 
     def get(self, kind: ResourceKind | str, filename: str) -> ModelMetadata:
-        return ModelMetadata.from_dict(self._cache.get(self._key(kind, filename)))
+        key = self._key(kind, filename)
+        return self._with_header(ModelMetadata.from_dict(self._cache.get(key)), key)
+
+    def _with_header(self, metadata: ModelMetadata, key: str) -> ModelMetadata:
+        header = self._headers.get(key)
+        if not header:
+            return metadata
+        if not metadata.arch:
+            metadata.arch = _arch_from_header(header)
+        if not metadata.name:
+            metadata.name = _first(header, "modelspec.title", "ss_output_name")
+        if not metadata.base_model:
+            metadata.base_model = _first(header, "ss_base_model_version", "modelspec.architecture")
+        if not metadata.description:
+            metadata.description = _first(header, "modelspec.description")
+        if not metadata.triggers:
+            metadata.triggers = _triggers_from_header(header)
+        return metadata
+
+    def header(self, kind: ResourceKind | str, filename: str) -> dict[str, str]:
+        return self._headers.get(self._key(kind, filename), {})
 
     def has(self, kind: ResourceKind | str, filename: str) -> bool:
         return self._key(kind, filename) in self._cache
@@ -178,6 +259,46 @@ class ModelMetadataStore:
                     changed = True
         if changed:
             self._save()
+
+    async def sync_headers(self, client: Client | None = None, force=False):
+        """Read metadata embedded in model files which is not in the cache yet."""
+        client = client or self._client
+        if client is None:
+            return
+        read = getattr(client, "get_model_header", None)
+        if read is None:
+            return
+        changed = False
+        for kind, folder in folder_names.items():
+            for filename in self.model_files(client, kind):
+                key = f"{folder}/{filename}"
+                if key in self._headers and not force:
+                    continue
+                try:
+                    header = await read(folder, filename)
+                except Exception as e:
+                    log.debug(f"No header for {folder}/{filename}: {e!s}")
+                    continue
+                if header:
+                    self._headers[key] = {
+                        str(k): str(v) for k, v in header.items() if isinstance(v, str)
+                    }
+                    changed = True
+        if changed:
+            self._save()
+
+    @staticmethod
+    def model_files(client: Client, kind: ResourceKind) -> list[str]:
+        models = getattr(client, "models", None)
+        if models is None:
+            return []
+        if kind is ResourceKind.checkpoint:
+            return list(getattr(models, "checkpoints", {}))
+        if kind is ResourceKind.lora:
+            return list(getattr(models, "loras", []))
+        if kind is ResourceKind.vae:
+            return list(getattr(models, "vae", []))
+        return []
 
     def capabilities(self, kind: ResourceKind | str, filename: str) -> list[str]:
         metadata = self.get(kind, filename)

@@ -10,7 +10,7 @@ from typing import Any, NamedTuple
 
 # Version identifier for all the resources defined here. This is used as the server version.
 # It usually follows the plugin version, but not all new plugin versions also require a server update.
-version = "1.56.0"
+version = "1.57.0"
 
 comfy_url = "https://github.com/comfyanonymous/ComfyUI"
 comfy_version = "067f853305e74a051dd17f15964d5b0e7887abf5"
@@ -43,7 +43,7 @@ required_custom_nodes = [
         "External Tooling Nodes",
         "comfyui-tooling-nodes",
         "https://forgejo.golden-toad.ts.net/vyls/comfyui-tooling-nodes",
-        "c74ec4697211bb37ed33c3364525b9365f2580b4",
+        "3b033bbd0542163487b0916a571774bd73bf0ee1",
         ["ETN_LoadImageCache", "ETN_SaveImageCache", "ETN_Translate"],
     ),
     CustomNode(

@@ -115,6 +115,12 @@ class ClientPool(Client):
                 result.update(data)
         return result
 
+    async def get_model_header(self, folder: str, filename: str) -> dict | None:
+        read = getattr(self.primary, "get_model_header", None)
+        if read is None:
+            return None
+        return await read(folder, filename)
+
     async def set_model_metadata(self, folder: str, filename: str, metadata: dict) -> bool:
         write = getattr(self.primary, "set_model_metadata", None)
         if write is None:

@@ -637,6 +637,16 @@ class ComfyClient(Client):
             log.warning(f"Could not read metadata for {folder}: {e!s}")
             return None
 
+    async def get_model_header(self, folder: str, filename: str) -> dict | None:
+        """Read metadata embedded in a safetensors file. None if unsupported."""
+        try:
+            return await self._get(f"api/etn/model_header/{folder}/{quote(filename)}")
+        except NetworkError as e:
+            if e.status in (404, 405):
+                return None
+            log.debug(f"Could not read header for {folder}/{filename}: {e!s}")
+            return None
+
     async def translate(self, text: str, lang: str):
         try:
             return await self._get(f"api/etn/translate/{lang}/{text}")
