@@ -18,6 +18,7 @@ from ..backend.client import (
 )
 from ..backend.cloud_client import CloudClient
 from ..backend.comfy_client import ComfyClient
+from ..backend.model_metadata import metadata_store
 from ..backend.network import NetworkError
 from ..backend.server_runner import ServerManager
 from ..localization import translate as _
@@ -109,6 +110,7 @@ class Connection(QObject, ObservableProperties):
             apply_performance_preset(settings, client.device_info)
 
             self._client = client
+            await metadata_store.sync(client)
             if self._task is None:
                 self._task = eventloop._loop.create_task(self._handle_messages())
             self.state = ConnectionState.connected

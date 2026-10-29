@@ -104,6 +104,23 @@ class ClientPool(Client):
         if by_client:
             await asyncio.gather(*(c.cancel(ids) for c, ids in by_client.items()))
 
+    async def get_folder_metadata(self, folder: str) -> dict[str, dict]:
+        result: dict[str, dict] = {}
+        for client in self._clients:
+            read = getattr(client, "get_folder_metadata", None)
+            if read is None:
+                continue
+            data = await read(folder)
+            if data:
+                result.update(data)
+        return result
+
+    async def set_model_metadata(self, folder: str, filename: str, metadata: dict) -> bool:
+        write = getattr(self.primary, "set_model_metadata", None)
+        if write is None:
+            return False
+        return bool(await write(folder, filename, metadata))
+
     async def refresh(self):
         await asyncio.gather(*(c.refresh() for c in self._clients), return_exceptions=True)
 

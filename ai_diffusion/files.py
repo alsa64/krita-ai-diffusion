@@ -1,7 +1,7 @@
 import hashlib
 import json
 from base64 import b64encode
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from enum import Enum, Flag
 from pathlib import Path
@@ -251,6 +251,7 @@ class FileFilter(QSortFilterProxyModel):
         super().__init__(parent)
         self._available_only = False
         self._name_prefix = ""
+        self._row_filter: Callable[[str], bool] | None = None
         self.setSourceModel(source)
         self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.sort(0)
@@ -262,6 +263,15 @@ class FileFilter(QSortFilterProxyModel):
     @available_only.setter
     def available_only(self, value):
         self._available_only = value
+        self.invalidateFilter()
+
+    @property
+    def row_filter(self) -> Callable[[str], bool] | None:
+        return self._row_filter
+
+    @row_filter.setter
+    def row_filter(self, value: Callable[[str], bool] | None):
+        self._row_filter = value
         self.invalidateFilter()
 
     @property
@@ -280,9 +290,11 @@ class FileFilter(QSortFilterProxyModel):
                 source = FileSource(src.data(index, FileCollection.source_role))
                 if source is FileSource.unavailable:
                     return False
-            if self._name_prefix:
-                name = src.data(index)
-                if not name.startswith(self._name_prefix):
+            if self._name_prefix or self._row_filter:
+                name = src.data(index) or ""
+                if self._name_prefix and not name.startswith(self._name_prefix):
+                    return False
+                if self._row_filter and not self._row_filter(name):
                     return False
         return True
 

@@ -10,7 +10,7 @@ from typing import Any, NamedTuple
 
 # Version identifier for all the resources defined here. This is used as the server version.
 # It usually follows the plugin version, but not all new plugin versions also require a server update.
-version = "1.55.0"
+version = "1.56.0"
 
 comfy_url = "https://github.com/comfyanonymous/ComfyUI"
 comfy_version = "067f853305e74a051dd17f15964d5b0e7887abf5"
@@ -42,8 +42,8 @@ required_custom_nodes = [
     CustomNode(
         "External Tooling Nodes",
         "comfyui-tooling-nodes",
-        "https://github.com/Acly/comfyui-tooling-nodes",
-        "b3ae4aa2d98f6ac4284ddbe261e3559c94bd652b",
+        "https://forgejo.golden-toad.ts.net/vyls/comfyui-tooling-nodes",
+        "c74ec4697211bb37ed33c3364525b9365f2580b4",
         ["ETN_LoadImageCache", "ETN_SaveImageCache", "ETN_Translate"],
     ),
     CustomNode(
@@ -740,6 +740,39 @@ def verify_model_integrity(base_dir: Path | None = None):
         if model.file_id not in verified:
             yield from model.verify(base_dir)
             verified.add(model.file_id)
+
+
+resource_folders: dict[ResourceKind, str] = {
+    ResourceKind.checkpoint: "checkpoints",
+    ResourceKind.text_encoder: "text_encoders",
+    ResourceKind.vae: "vae",
+    ResourceKind.controlnet: "controlnet",
+    ResourceKind.clip_vision: "clip_vision",
+    ResourceKind.ip_adapter: "ipadapter",
+    ResourceKind.lora: "loras",
+    ResourceKind.model_patch: "model_patches",
+    ResourceKind.upscaler: "upscale_models",
+    ResourceKind.inpaint: "inpaint",
+}
+
+
+def server_folder(kind: ResourceKind) -> str:
+    """Name of the ComfyUI folder a resource kind is stored in."""
+    return resource_folders.get(kind, kind.name)
+
+
+def downloads(kind: ResourceKind, arch: Arch | None = None):
+    """All files of a kind which can be downloaded, optionally limited to an architecture."""
+    result = []
+    for resource in all_models():
+        if resource.kind is not kind:
+            continue
+        if arch is not None and resource.arch not in (arch, Arch.all):
+            continue
+        for file in resource.files:
+            if file.url:
+                result.append((resource, file))
+    return result
 
 
 def search_path(kind: ResourceKind, arch: Arch, identifier: ControlMode | UpscalerName | str):

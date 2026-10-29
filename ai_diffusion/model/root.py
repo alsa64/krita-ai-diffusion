@@ -14,6 +14,8 @@ from .. import platform_tools, util
 from ..backend.client import ClientMessage
 from ..backend.client_pool import ClientPool
 from ..backend.comfy_client import ComfyClient
+from ..backend.model_metadata import metadata_store
+from ..backend.resources import ResourceKind
 from ..backend.server import Server, ServerState
 from ..backend.server_runner import ServerManager, probe_server
 from ..document import Document, KritaDocument
@@ -213,6 +215,15 @@ class Root(QObject):
 
             loras = [File.remote(lora, FileFormat.lora) for lora in client.models.loras]
             self._files.loras.update(loras, FileSource.remote)
+            self.sync_model_metadata()
+
+    def sync_model_metadata(self):
+        """Copy trigger words from model metadata into the lora file list."""
+        for file in self._files.loras:
+            triggers = metadata_store.get(ResourceKind.lora, file.name).triggers
+            value = ", ".join(triggers)
+            if value and (file.metadata or {}).get("lora_triggers") != value:
+                self._files.loras.set_meta(file, "lora_triggers", value)
 
 
 root = Root()

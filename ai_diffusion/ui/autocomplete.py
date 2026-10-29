@@ -7,6 +7,8 @@ from PyQt6.QtCore import QAbstractProxyModel, QRect, QSize, QStringListModel, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPalette, QPen, QTextCursor
 from PyQt6.QtWidgets import QApplication, QCompleter, QPlainTextEdit, QStyle, QStyledItemDelegate
 
+from ..backend.model_metadata import metadata_store
+from ..backend.resources import Arch, ResourceKind
 from ..files import FileFilter
 from ..model.root import root
 from ..settings import settings
@@ -137,6 +139,18 @@ _tag_model = TagListModel([])
 _tag_files = None
 
 
+def _lora_filter(arch: Arch | None):
+    """Only list loras of the given architecture, plus loras with unknown architecture."""
+    if arch is None or arch is Arch.auto:
+        return lambda name: True
+
+    def accept(name: str) -> bool:
+        lora_arch = metadata_store.get(ResourceKind.lora, name).architecture
+        return lora_arch is None or Arch.is_compatible(lora_arch, arch)
+
+    return accept
+
+
 class PromptAutoComplete:
     def __init__(self, widget: QPlainTextEdit):
         self._widget = widget
@@ -218,6 +232,7 @@ class PromptAutoComplete:
             layer_mode = len(prefix) > len(name)
 
         if lora_mode:
+            self._lora_model.row_filter = _lora_filter(root.active_model.arch)
             self._completer.setModel(self._lora_model)
             self._completion_prefix = name
             self._completion_suffix = ">"

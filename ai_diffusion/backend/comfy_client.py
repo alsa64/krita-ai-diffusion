@@ -10,6 +10,7 @@ from enum import Enum
 from itertools import product
 from time import time
 from typing import Any
+from urllib.parse import quote
 
 from .. import platform_tools, util
 from ..files import FileFormat
@@ -608,6 +609,33 @@ class ComfyClient(Client):
                     transfers.append(self._transfer_result_image(id))
             return await asyncio.gather(*transfers)
         return []
+
+    async def get_model_metadata(self, folder: str, filename: str) -> dict | None:
+        """Read the metadata sidecar of a model. None if the server does not support it."""
+        try:
+            return await self._get(f"api/etn/model_meta/{folder}/{quote(filename)}")
+        except NetworkError as e:
+            if e.status in (404, 405):
+                return None
+            log.warning(f"Could not read metadata for {folder}/{filename}: {e!s}")
+            return None
+
+    async def set_model_metadata(self, folder: str, filename: str, metadata: dict) -> bool:
+        try:
+            await self._post(f"api/etn/model_meta/{folder}/{quote(filename)}", metadata)
+            return True
+        except NetworkError as e:
+            log.warning(f"Could not write metadata for {folder}/{filename}: {e!s}")
+            return False
+
+    async def get_folder_metadata(self, folder: str) -> dict[str, dict] | None:
+        try:
+            return await self._get(f"api/etn/model_meta/{folder}")
+        except NetworkError as e:
+            if e.status in (404, 405):
+                return None
+            log.warning(f"Could not read metadata for {folder}: {e!s}")
+            return None
 
     async def translate(self, text: str, lang: str):
         try:

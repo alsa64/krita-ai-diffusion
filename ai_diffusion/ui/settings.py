@@ -63,6 +63,7 @@ from ..persistence import (
 )
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
 from ..style import Style, Styles, style_defaults, style_defaults_schema
+from .model_manager import ModelManagerWidget
 from .server import ServerWidget
 from .servers import ServersWidget
 from .settings_widgets import (
@@ -1788,6 +1789,7 @@ class SettingsDialog(QDialog):
         self.setLayout(layout)
 
         self.connection = ConnectionSettings(server)
+        self.models = ModelManagerWidget()
         self.styles = StylePresets(server)
         self.style_defaults = StyleDefaultsSettings(server)
         self.workspace_defaults = WorkspaceDefaultsSettings()
@@ -1807,6 +1809,7 @@ class SettingsDialog(QDialog):
             self._stack.addWidget(widget)
 
         create_list_item(_("Connection"), self.connection)
+        create_list_item(_("Models"), self.models)
         create_list_item(_("Styles"), self.styles)
         create_list_item(_("Style Defaults"), self.style_defaults)
         create_list_item(_("Workspace Defaults"), self.workspace_defaults)
