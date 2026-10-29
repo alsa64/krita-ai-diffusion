@@ -14,6 +14,7 @@ from .. import platform_tools, util
 from ..backend.client import ClientMessage
 from ..backend.comfy_client import ComfyClient
 from ..backend.server import Server, ServerState
+from ..backend.server_runner import ServerManager
 from ..document import Document, KritaDocument
 from ..files import File, FileFormat, FileLibrary, FileSource
 from ..persistence import ModelSync, RecentlyUsedSync, import_prompt_from_file
@@ -42,7 +43,8 @@ class Root(QObject):
 
     def init(self):
         self._server = Server(settings.server_path)
-        self._connection = Connection()
+        self._servers = ServerManager()
+        self._connection = Connection(self._servers)
         self._files = FileLibrary.load()
         self._workflows = WorkflowCollection(self._connection)
         self._models: list[Root.PerDocument] = []
@@ -92,6 +94,10 @@ class Root(QObject):
         return self._server
 
     @property
+    def servers(self) -> ServerManager:
+        return self._servers
+
+    @property
     def files(self) -> FileLibrary:
         return self._files
 
@@ -112,7 +118,14 @@ class Root(QObject):
     async def autostart(self, signal_server_change: Callable):
         connection = self._connection
         try:
-            if (
+            if settings.server_mode is ServerMode.servers and self._servers is not None:
+                profile = self._servers.ensure_active()
+                url = await self._servers.ensure_running(profile)
+                signal_server_change()
+                client = ComfyClient(url)
+                await connection._connect(client)
+                signal_server_change()
+            elif (
                 settings.server_mode is ServerMode.managed
                 and self._server.state is ServerState.stopped
             ):

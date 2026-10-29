@@ -19,6 +19,7 @@ from ..backend.client import (
 from ..backend.cloud_client import CloudClient
 from ..backend.comfy_client import ComfyClient
 from ..backend.network import NetworkError
+from ..backend.server_runner import ServerManager
 from ..localization import translate as _
 from ..settings import PerformancePreset, ServerMode, Settings, settings
 from .properties import ObservableProperties, Property
@@ -50,9 +51,10 @@ class Connection(QObject, ObservableProperties):
     message_received = pyqtSignal(ClientMessage)
     workflow_published = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, servers: ServerManager | None = None):
         super().__init__()
 
+        self._servers = servers
         self._client: Client | None = None
         self._task: asyncio.Task | None = None
         self._workflows: dict[str, dict] = {}
@@ -137,6 +139,13 @@ class Connection(QObject, ObservableProperties):
                     self.state = ConnectionState.auth_missing
                     return None
                 return CloudClient(settings.cloud_api_url, settings.access_token)
+            case ServerMode.servers:
+                profile = self._servers.active if self._servers else None
+                if profile is None:
+                    self.state = ConnectionState.disconnected
+                    return None
+                runner = self._servers.runner(profile) if self._servers else None
+                return ComfyClient(runner.url if runner else profile.url, settings.access_token)
             case ServerMode.external | ServerMode.managed:
                 return ComfyClient(settings.server_url, settings.access_token)
             case _:
@@ -239,7 +248,11 @@ class Connection(QObject, ObservableProperties):
             self.state = ConnectionState.disconnected
 
     def _handle_settings_changed(self, key: str, value: object):
-        if key == "server_mode":
+        if key in ("server_mode", "active_server"):
+            if key == "active_server" or settings.server_mode is ServerMode.servers:
+                self.error = ""
+                eventloop.run(self.disconnect())
+                return
             client_is_cloud = isinstance(self._client, CloudClient)
             mode_is_cloud = settings.server_mode is ServerMode.cloud
             if client_is_cloud != mode_is_cloud:

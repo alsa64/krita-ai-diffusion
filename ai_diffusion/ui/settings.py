@@ -64,6 +64,7 @@ from ..persistence import (
 from ..settings import ImageFileFormat, PerformancePreset, ServerMode, Settings, settings
 from ..style import Style, Styles, style_defaults, style_defaults_schema
 from .server import ServerWidget
+from .servers import ServersWidget
 from .settings_widgets import (
     ComboBoxSetting,
     DoubleSpinBoxSetting,
@@ -115,30 +116,12 @@ class InitialSetupWidget(QWidget):
             layout.addSpacing(16)
 
         add_option(
-            _("Option {number}", number=1) + ": " + _("Online Service"),
+            _("ComfyUI Server"),
             _(
-                "Generate images via {link}. Create an account to get started. No local installation or powerful hardware needed.",
-                link=f"<a href='{settings.cloud_web_url}'>interstice.cloud</a>",
+                "Connect to a ComfyUI server, local or remote. If the server is not running, the plugin can start it with a command you define. Multiple servers can be added and are used depending on the models they have installed."
             ),
-            _("Login or Sign up"),
-            ServerMode.cloud,
-        )
-        add_option(
-            _("Option {number}", number=2) + ": " + _("Local Managed Server"),
-            _(
-                "Install and run a local ComfyUI server on your machine. Installation and updates are performed automatically by the plugin. Requires a compatible GPU (NVIDIA with at least 6GB VRAM recommended)."
-            ),
-            _("Start Installation"),
-            ServerMode.managed,
-        )
-        add_option(
-            _("Option {number}", number=3) + ": " + _("Custom ComfyUI"),
-            _(
-                "Connect to an existing installation of ComfyUI. It can be on the same machine, or a remote machine over the network. You are responsible to setup ComfyUI and install required custom nodes and models."
-            )
-            + "<br><a href='https://docs.interstice.cloud/comfyui-setup'>ComfyUI Setup Guide</a>",
-            _("Connect via URL"),
-            ServerMode.external,
+            _("Configure Server"),
+            ServerMode.servers,
         )
         layout.addStretch()
 
@@ -349,6 +332,7 @@ _server_mode_text = {
     ServerMode.cloud: _("Online Service"),
     ServerMode.managed: _("Local Managed Server"),
     ServerMode.external: _("Custom Server"),
+    ServerMode.servers: _("ComfyUI Server"),
 }
 _server_mode_status = {
     "signed_out": (_("Signed out"), grey),
@@ -433,13 +417,24 @@ class ServerModeSelect(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
+        self._servers_button = ServerModeButton(ServerMode.servers, "not_connected", self)
         self._cloud_button = ServerModeButton(ServerMode.cloud, "signed_out", self)
         self._managed_button = ServerModeButton(ServerMode.managed, "not_installed", self)
         self._external_button = ServerModeButton(ServerMode.external, "not_connected", self)
 
-        for button in (self._cloud_button, self._managed_button, self._external_button):
+        for button in (
+            self._servers_button,
+            self._cloud_button,
+            self._managed_button,
+            self._external_button,
+        ):
             button.toggled.connect(self._change_mode)
 
+        # The original modes are kept for compatibility but no longer offered.
+        for button in (self._cloud_button, self._managed_button, self._external_button):
+            button.setVisible(False)
+
+        layout.addWidget(self._servers_button)
         layout.addWidget(self._cloud_button)
         layout.addWidget(self._managed_button)
         layout.addWidget(self._external_button)
@@ -451,6 +446,8 @@ class ServerModeSelect(QWidget):
 
     @property
     def mode(self):
+        if self._servers_button.isChecked():
+            return ServerMode.servers
         if self._cloud_button.isChecked():
             return ServerMode.cloud
         elif self._managed_button.isChecked():
@@ -461,6 +458,9 @@ class ServerModeSelect(QWidget):
 
     @mode.setter
     def mode(self, mode: ServerMode):
+        if mode in (ServerMode.undefined, ServerMode.managed, ServerMode.external):
+            mode = ServerMode.servers
+        self._servers_button.setChecked(mode is ServerMode.servers)
         self._cloud_button.setChecked(mode is ServerMode.cloud)
         self._managed_button.setChecked(mode is ServerMode.managed)
         self._external_button.setChecked(mode is ServerMode.external)
@@ -468,6 +468,15 @@ class ServerModeSelect(QWidget):
     def update_status(self, state: ConnectionState, server_state: ServerState):
         self._cloud_button.status = "signed_out"
         self._external_button.status = "not_connected"
+        match state:
+            case ConnectionState.connected:
+                self._servers_button.status = "connected"
+            case ConnectionState.connecting | ConnectionState.discover_models:
+                self._servers_button.status = "connecting"
+            case ConnectionState.error:
+                self._servers_button.status = "error"
+            case _:
+                self._servers_button.status = "not_connected"
         match server_state:
             case ServerState.not_installed:
                 self._managed_button.status = "not_installed"
@@ -514,8 +523,10 @@ class ConnectionSettings(SettingsTab):
         self._setup_widget = InitialSetupWidget(self)
         self._cloud_widget = CloudWidget(self)
         self._server_widget = ServerWidget(server, self)
+        self._servers_widget = ServersWidget(root.servers, self)
         self._connection_widget = QWidget(self)
         self._server_stack = QStackedWidget(self)
+        self._server_stack.addWidget(self._servers_widget)
         self._server_stack.addWidget(self._setup_widget)
         self._server_stack.addWidget(self._cloud_widget)
         self._server_stack.addWidget(self._server_widget)
@@ -582,6 +593,8 @@ class ConnectionSettings(SettingsTab):
         self._server_widget.state_changed.connect(self.update_server_status)
 
     def _setup_finished(self, mode: ServerMode):
+        root.servers.ensure_active()
+        self._servers_widget.reload()
         self._server_mode.mode = mode
         self._update_server_mode(mode)
 
@@ -591,6 +604,7 @@ class ConnectionSettings(SettingsTab):
             ServerMode.cloud: self._cloud_widget,
             ServerMode.managed: self._server_widget,
             ServerMode.external: self._connection_widget,
+            ServerMode.servers: self._servers_widget,
             ServerMode.undefined: self._setup_widget,
         }[mode]
         self._server_stack.setCurrentWidget(widget)

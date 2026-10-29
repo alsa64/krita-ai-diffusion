@@ -21,6 +21,7 @@ class ServerMode(Enum):
     managed = 0
     external = 1
     cloud = 2
+    servers = 3
 
 
 class ServerBackend(Enum):
@@ -187,6 +188,16 @@ class Settings(QObject):
 
     access_token: str
     _access_token = Setting(_("Cloud Access Token"), "")
+
+    server_profiles: list[dict[str, Any]]
+    _server_profiles = Setting(
+        _("Server Profiles"),
+        [],
+        _("ComfyUI servers this plugin can connect to, with an optional command to start them"),
+    )
+
+    active_server: str
+    _active_server = Setting(_("Active Server"), "", _("Server used for new generations"))
 
     server_path: str
     _server_path = Setting(
