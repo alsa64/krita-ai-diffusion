@@ -78,13 +78,15 @@ class ServerRunner(QObject):
     def error(self):
         return self._error
 
-    @property
     def managed_server(self) -> Server | None:
-        return self._server
+        if not self.profile.is_managed:
+            return None
+        return self._managed()
 
     def _managed(self) -> Server:
-        if self._server is None or str(self._server.path) != self.profile.directory:
-            self._server = Server(self.profile.directory or settings.server_path)
+        path = self.profile.directory or str(settings.server_path)
+        if self._server is None or str(self._server.path) != path:
+            self._server = Server(path)
         return self._server
 
     async def ensure_running(self) -> str:

@@ -371,7 +371,7 @@ class LoraList(QWidget):
         self._refresh_button.clicked.connect(root.connection.refresh)
         header_layout.addWidget(self._refresh_button, 0)
 
-        if settings.server_mode is ServerMode.managed:
+        if _can_open_server_folder():
             open_folder = self.open_folder_button = QToolButton(self)
             open_folder.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             open_folder.setIcon(Krita.instance().icon("document-open"))
@@ -569,6 +569,15 @@ class SamplerWidget(QWidget):
         setattr(style, f"{self.prefix}cfg_scale", self._cfg.value)
 
 
+def _can_open_server_folder() -> bool:
+    if settings.server_mode is ServerMode.managed:
+        return True
+    if settings.server_mode is ServerMode.servers:
+        profile = root.servers.active
+        return profile is not None and bool(profile.models_path or profile.is_managed)
+    return False
+
+
 class StyleSettingsEditor(QWidget):
     value_changed = pyqtSignal()
 
@@ -674,7 +683,7 @@ class StyleSettingsEditor(QWidget):
 
         self._layout.addStretch()
 
-        if settings.server_mode is ServerMode.managed:
+        if _can_open_server_folder():
             self._checkpoint_select.add_button(
                 Krita.instance().icon("document-open"),
                 _("Open the folder where checkpoints are stored"),
@@ -734,10 +743,15 @@ class StyleSettingsEditor(QWidget):
         self._open_folder(Path("models/loras"))
 
     def _open_folder(self, subfolder: Path):
-        if self.server.comfy_dir is not None:
+        profile = root.servers.active if settings.server_mode is ServerMode.servers else None
+        if profile is not None and profile.models_path:
+            folder = Path(profile.models_path) / subfolder.name
+        elif self.server.comfy_dir is not None:
             folder = self.server.path / subfolder
-            folder.mkdir(parents=True, exist_ok=True)
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        else:
+            return
+        folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def _set_checkpoint_warning(self):
         self._checkpoint_warning.setVisible(False)

@@ -901,7 +901,7 @@ class Settings(QObject):
             k[1:]: v.default for k, v in Settings.__dict__.items() if isinstance(v, Setting)
         }
         if not init:
-            self.server_mode = ServerMode.managed
+            self.server_mode = ServerMode.servers
 
     def save(self, path: Path | None = None):
         path = self.default_path or path

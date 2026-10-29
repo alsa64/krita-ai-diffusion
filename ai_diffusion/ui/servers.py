@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import eventloop
+from ..backend.network import DownloadProgress
+from ..backend.server import InstallationProgress, ServerState
 from ..backend.server_profile import (
     ServerKind,
     ServerProfile,
@@ -125,6 +127,19 @@ class ServersWidget(QWidget):
 
         self._status = QLabel(self)
         right.addWidget(self._status)
+
+        self._setup = QHBoxLayout()
+        self._install_button = QPushButton(_("Install / Update Server"))
+        self._install_button.clicked.connect(self._install)
+        self._download_button = QPushButton(_("Download Models"))
+        self._download_button.clicked.connect(self._download)
+        self._setup.addWidget(self._install_button)
+        self._setup.addWidget(self._download_button)
+        self._setup.addStretch()
+        right.addLayout(self._setup)
+        self._progress = QLabel(self)
+        self._progress.setWordWrap(True)
+        right.addWidget(self._progress)
         right.addStretch()
         layout.addLayout(right, 2)
 
@@ -198,6 +213,11 @@ class ServersWidget(QWidget):
             self._stop_button,
         ):
             widget.setEnabled(enabled)
+        managed = profile is not None and profile.is_managed
+        self._install_button.setEnabled(managed)
+        self._download_button.setEnabled(managed)
+        if not managed:
+            self._progress.setText("")
         self._load(profile)
         self._update_status()
 
@@ -313,6 +333,56 @@ class ServersWidget(QWidget):
         if runner is not None:
             eventloop.run(runner.stop())
             self._update_status()
+
+    def _managed_server(self):
+        runner = self._runner()
+        return runner.managed_server() if runner is not None else None
+
+    def _install(self):
+        server = self._managed_server()
+        if server is None:
+            return
+        self._apply()
+
+        async def install():
+            try:
+                if server.state is ServerState.update_required:
+                    await server.upgrade(self._handle_progress)
+                if server.state in [ServerState.not_installed, ServerState.missing_resources]:
+                    await server.install(self._handle_progress)
+                self._progress.setText(_("Server installation complete"))
+            except Exception as e:
+                self._progress.setText(str(e))
+
+        eventloop.run(install())
+
+    def _download(self):
+        server = self._managed_server()
+        if server is None:
+            return
+        self._apply()
+
+        async def download():
+            try:
+                server.check_install()
+                if server.missing_resources:
+                    await server.download(server.missing_resources, self._handle_progress)
+                self._progress.setText(_("Model download complete"))
+            except Exception as e:
+                self._progress.setText(str(e))
+
+        eventloop.run(download())
+
+    def _handle_progress(self, progress: InstallationProgress):
+        text = progress.stage
+        if isinstance(progress.progress, DownloadProgress):
+            text += f" ({progress.progress.value * 100:.0f}%)"
+        elif isinstance(progress.progress, tuple):
+            done, total = progress.progress
+            text += f" ({done}/{total})"
+        if progress.message:
+            text += f": {progress.message}"
+        self._progress.setText(text)
 
     def _update_status(self):
         runner = self._runner()

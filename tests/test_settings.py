@@ -110,7 +110,8 @@ def test_restore():
     s.history_size = 5
     s.server_mode = ServerMode.external
     s.restore()
-    assert s.history_size == Settings._history_size.default and s.server_mode is ServerMode.managed
+    assert s.history_size == Settings._history_size.default
+    assert s.server_mode is ServerMode.servers
 
 
 def test_save():
