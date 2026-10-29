@@ -23,6 +23,7 @@ from ..backend.network import NetworkError
 from ..backend.server_runner import ServerManager
 from ..localization import translate as _
 from ..settings import PerformancePreset, ServerMode, Settings, settings
+from ..util import client_logger as log
 from .properties import ObservableProperties, Property
 
 
@@ -112,6 +113,8 @@ class Connection(QObject, ObservableProperties):
             self._client = client
             await metadata_store.sync(client)
             await metadata_store.sync_headers(client)
+            if added := metadata_store.apply_roles(client.models):
+                log.info(f"Registered {added} model(s) from metadata roles")
             if self._task is None:
                 self._task = eventloop._loop.create_task(self._handle_messages())
             self.state = ConnectionState.connected

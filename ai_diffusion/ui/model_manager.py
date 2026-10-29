@@ -28,7 +28,7 @@ from ..backend import network, resources
 from ..backend.capabilities import capability_labels, feature_capabilities
 from ..backend.client import ClientModels
 from ..backend.model_metadata import ModelMetadata, metadata_store, model_types
-from ..backend.resources import Arch, ResourceId, ResourceKind
+from ..backend.resources import Arch, ControlMode, ResourceId, ResourceKind
 from ..localization import translate as _
 from ..settings import ServerMode, settings
 from ..util import client_logger as log
@@ -156,6 +156,13 @@ class MetadataDialog(QDialog):
         self._arch.setCurrentIndex(max(0, self._arch.findData(current)))
         layout.addRow(_("Architecture"), self._arch)
 
+        self._role = QComboBox()
+        self._role.addItem(_("(not set)"), "")
+        for mode in ControlMode:
+            self._role.addItem(mode.text, mode.name)
+        self._role.setCurrentIndex(max(0, self._role.findData(metadata.role)))
+        layout.addRow(_("Role"), self._role)
+
         self._base = QLineEdit(metadata.base_model)
         layout.addRow(_("Base model"), self._base)
 
@@ -198,6 +205,7 @@ class MetadataDialog(QDialog):
             description=self._description.toPlainText().strip(),
             triggers=[t.strip() for t in self._triggers.text().split(",") if t.strip()],
             capabilities=list(self._capabilities),
+            role=self._role.currentData() or "",
             base_model=self._base.text().strip(),
         )
 

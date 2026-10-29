@@ -141,3 +141,25 @@ def test_sidecar_overrides_header(tmp_path: Path):
     lora = store.get(ResourceKind.lora, "style.safetensors")
     assert lora.name == "Custom"
     assert lora.arch == "sd15"
+
+
+def test_role_registers_resource(tmp_path: Path):
+    store = ModelMetadataStore(tmp_path / "metadata.json")
+    store.set(
+        ResourceKind.lora,
+        "my-inpaint-lora.safetensors",
+        ModelMetadata(arch="flux2_4b", role="inpaint"),
+    )
+    store.set(
+        ResourceKind.controlnet,
+        "my-depth.safetensors",
+        ModelMetadata(arch="sd15", role="depth"),
+    )
+    models = ClientModels()
+    assert store.apply_roles(models) == 2
+    assert models.resources["lora-inpaint-flux2_4b"] == "my-inpaint-lora.safetensors"
+    assert models.resources["controlnet-depth-sd15"] == "my-depth.safetensors"
+    # existing assignments from filename patterns are not overridden
+    models.resources["controlnet-depth-sd15"] = "other.safetensors"
+    store.apply_roles(models)
+    assert models.resources["controlnet-depth-sd15"] == "other.safetensors"

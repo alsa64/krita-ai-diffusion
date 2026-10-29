@@ -9,9 +9,14 @@ from typing import Any
 from .. import eventloop, util
 from ..util import client_logger as log
 from .client import Client
-from .resources import Arch, ResourceKind, resource_folders
+from .resources import Arch, ResourceId, ResourceKind, resource_folders
 
 folder_names = resource_folders
+_folder_kinds = {folder: kind for kind, folder in resource_folders.items()}
+
+
+def _kind_from_folder(folder: str) -> ResourceKind | None:
+    return _folder_kinds.get(folder)
 
 # Types a model can be used for. Capabilities are not limited by architecture: the
 # plugin asks the model for its type instead of using built-in per-architecture tables.
@@ -42,6 +47,7 @@ class ModelMetadata:
     description: str = ""
     triggers: list[str] = field(default_factory=list)
     capabilities: list[str] = field(default_factory=list)
+    role: str = ""
     base_model: str = ""
     updated: str = ""
 
@@ -63,6 +69,8 @@ class ModelMetadata:
             data["triggers"] = list(self.triggers)
         if self.capabilities:
             data["capabilities"] = list(self.capabilities)
+        if self.role:
+            data["role"] = self.role
         if self.base_model:
             data["base_model"] = self.base_model
         if self.updated:
@@ -85,6 +93,7 @@ class ModelMetadata:
             description=str(data.get("description", "")),
             triggers=[str(t) for t in data.get("triggers", [])],
             capabilities=[str(c) for c in data.get("capabilities", [])],
+            role=str(data.get("role", "")),
             base_model=str(data.get("base_model", "")),
             updated=str(data.get("updated", "")),
         )
@@ -306,6 +315,33 @@ class ModelMetadataStore:
 
     def arch_of(self, kind: ResourceKind | str, filename: str) -> Arch | None:
         return self.get(kind, filename).architecture
+
+    def role_of(self, kind: ResourceKind | str, filename: str) -> str:
+        return self.get(kind, filename).role
+
+    def apply_roles(self, models):
+        """Register models which declare a role (e.g. a LoRA used for inpainting).
+
+        Roles take the place of hardcoded file name patterns: a model with
+        `role="inpaint"` becomes the inpaint model of its architecture.
+        """
+        added = 0
+        for key, data in self._cache.items():
+            meta = self._with_header(ModelMetadata.from_dict(data), key)
+            arch = meta.architecture
+            if arch is None or not meta.role:
+                continue
+            kind = _kind_from_folder(key.split("/", 1)[0])
+            if kind is None:
+                continue
+            filename = key.split("/", 1)[1]
+            if kind is ResourceKind.checkpoint:
+                continue
+            resource = ResourceId(kind, arch, meta.role)
+            if models.resources.get(resource.string) is None:
+                models.resources[resource.string] = filename
+                added += 1
+        return added
 
 
 metadata_store = ModelMetadataStore()
