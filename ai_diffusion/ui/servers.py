@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import eventloop
-from ..backend.comfy_client import ComfyClient
 from ..backend.server_profile import (
     ServerKind,
     ServerProfile,
@@ -285,11 +284,10 @@ class ServersWidget(QWidget):
 
         async def connect():
             try:
-                url = await runner.ensure_running()
+                await root.connect_servers()
             except Exception as e:
                 self._status.setText(str(e))
                 return
-            root.connection.connect(ComfyClient(url))
             self._update_status()
 
         eventloop.run(connect())

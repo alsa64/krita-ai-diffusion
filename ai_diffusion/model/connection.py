@@ -140,6 +140,8 @@ class Connection(QObject, ObservableProperties):
                     return None
                 return CloudClient(settings.cloud_api_url, settings.access_token)
             case ServerMode.servers:
+                if self._client is not None:
+                    return self._client
                 profile = self._servers.active if self._servers else None
                 if profile is None:
                     self.state = ConnectionState.disconnected

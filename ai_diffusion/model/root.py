@@ -12,9 +12,10 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from .. import platform_tools, util
 from ..backend.client import ClientMessage
+from ..backend.client_pool import ClientPool
 from ..backend.comfy_client import ComfyClient
 from ..backend.server import Server, ServerState
-from ..backend.server_runner import ServerManager
+from ..backend.server_runner import ServerManager, probe_server
 from ..document import Document, KritaDocument
 from ..files import File, FileFormat, FileLibrary, FileSource
 from ..persistence import ModelSync, RecentlyUsedSync, import_prompt_from_file
@@ -115,15 +116,27 @@ class Root(QObject):
             return model
         return self._null_model
 
+    async def connect_servers(self):
+        """Start the active server if needed, then connect to every reachable server."""
+        servers = self._servers
+        active = servers.ensure_active()
+        url = await servers.ensure_running(active)
+        profiles = sorted(servers.profiles, key=lambda p: p.id != active.id)
+        clients: list[ComfyClient] = []
+        for profile in profiles:
+            runner = servers.runner(profile)
+            profile_url = url if profile.id == active.id else runner.url
+            if profile.id != active.id and not await probe_server(profile_url):
+                continue
+            clients.append(ComfyClient(profile_url, settings.access_token))
+        client = clients[0] if len(clients) == 1 else ClientPool(clients)
+        await self._connection._connect(client)
+
     async def autostart(self, signal_server_change: Callable):
         connection = self._connection
         try:
             if settings.server_mode is ServerMode.servers and self._servers is not None:
-                profile = self._servers.ensure_active()
-                url = await self._servers.ensure_running(profile)
-                signal_server_change()
-                client = ComfyClient(url)
-                await connection._connect(client)
+                await self.connect_servers()
                 signal_server_change()
             elif (
                 settings.server_mode is ServerMode.managed
