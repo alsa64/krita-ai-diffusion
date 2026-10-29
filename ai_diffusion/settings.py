@@ -209,7 +209,9 @@ class Settings(QObject):
 
     server_arguments: str
     _server_arguments = Setting(
-        _("Server Arguments"), "", _("Additional command line arguments passed to the server")
+        _("Server Arguments"),
+        "--fast",
+        _("Additional command line arguments passed to the server"),
     )
 
     server_authorization: str
