@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from PyQt6.QtGui import QColor
 from PyQt6.QtNetwork import QNetworkAccessManager
@@ -210,6 +211,45 @@ class MetadataDialog(QDialog):
         )
 
 
+class AddUrlDialog(QDialog):
+    """Download a model file which is not in the registry."""
+
+    def __init__(self, kind: ResourceKind, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(_("Add {} by URL").format(_(kind.value)))
+        self.setMinimumWidth(460)
+        layout = QFormLayout(self)
+        self._url = QLineEdit(self)
+        self._url.setPlaceholderText("https://huggingface.co/.../model.safetensors")
+        self._filename = QLineEdit(self)
+        self._filename.setPlaceholderText(_("File name (optional)"))
+        layout.addRow(_("URL"), self._url)
+        layout.addRow(_("File name"), self._filename)
+        self._url.textChanged.connect(self._update_ok)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+        self._ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._update_ok()
+
+    def _update_ok(self):
+        if self._ok is not None:
+            self._ok.setEnabled(bool(self.url()))
+
+    def url(self) -> str:
+        return self._url.text().strip()
+
+    def filename(self) -> str:
+        if name := self._filename.text().strip():
+            return name
+        path = urlparse(self.url()).path
+        return Path(unquote(path)).name or "model.safetensors"
+
+
 class ModelKindTab(QWidget):
     def __init__(self, kind: ResourceKind, manager: ModelManagerWidget):
         super().__init__()
@@ -254,12 +294,15 @@ class ModelKindTab(QWidget):
         self._download_all.clicked.connect(self._download_missing)
         self._edit = QPushButton(_("Edit Metadata"))
         self._edit.clicked.connect(self._edit_metadata)
+        self._add_url = QPushButton(_("Add by URL"))
+        self._add_url.clicked.connect(self._add_by_url)
 
         buttons.addWidget(self._filter)
         buttons.addStretch()
         buttons.addWidget(self._download)
         buttons.addWidget(self._download_all)
         buttons.addWidget(self._edit)
+        buttons.addWidget(self._add_url)
 
         layout.addLayout(buttons)
         layout.addWidget(self._table)
@@ -322,34 +365,49 @@ class ModelKindTab(QWidget):
         if files:
             self._download_files(files)
 
+    def _add_by_url(self):
+        dialog = AddUrlDialog(self._kind, self)
+        if dialog.exec() and dialog.url():
+            base_dir = self._manager.download_dir(self._kind)
+            target = base_dir / dialog.filename()
+            self._download_to(dialog.url(), target)
+
     def _download_files(self, files: list[resources.ModelFile]):
         base_dir = self._manager.download_dir(self._kind)
         self._status.setText(_("Downloading to {}").format(base_dir))
-        self._download.setEnabled(False)
-        self._download_all.setEnabled(False)
 
         async def download():
-            try:
-                for file in files:
-                    target = base_dir / Path(file.path).name
-                    if target.exists():
-                        continue
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    self._status.setText(_("Downloading {}").format(target.name))
-                    async for progress in network.download(self._network, file.url, target):
-                        self._status.setText(
-                            _("Downloading {} {:.0f}%").format(target.name, progress.value * 100)
-                        )
-                self._status.setText(_("Download finished"))
-            except Exception as e:
-                log.error(f"Model download failed: {e!s}")
-                self._status.setText(str(e))
-            finally:
-                self._download.setEnabled(True)
-                self._download_all.setEnabled(True)
-                self._manager.refresh()
+            for file in files:
+                target = base_dir / Path(file.path).name
+                if target.exists():
+                    continue
+                await self._fetch(file.url, target)
 
         eventloop.run(download())
+
+    def _download_to(self, url: str, target: Path):
+        eventloop.run(self._fetch(url, target))
+
+    async def _fetch(self, url: str, target: Path):
+        self._download.setEnabled(False)
+        self._download_all.setEnabled(False)
+        self._add_url.setEnabled(False)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self._status.setText(_("Downloading {}").format(target.name))
+            async for progress in network.download(self._network, url, target):
+                self._status.setText(
+                    _("Downloading {} {:.0f}%").format(target.name, progress.value * 100)
+                )
+            self._status.setText(_("Download finished"))
+        except Exception as e:
+            log.error(f"Model download failed: {e!s}")
+            self._status.setText(str(e))
+        finally:
+            self._download.setEnabled(True)
+            self._download_all.setEnabled(True)
+            self._add_url.setEnabled(True)
+            self._manager.refresh()
 
 
 class ModelManagerWidget(QWidget):
