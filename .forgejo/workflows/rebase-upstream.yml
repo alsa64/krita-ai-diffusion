@@ -1,0 +1,63 @@
+name: Rebase onto upstream
+
+# Keeps this fork as "<upstream release tag> + our local commits". Copy this file
+# to .forgejo/workflows/ and rebase-upstream.sh to .forgejo/scripts/, then set the
+# UPSTREAM_* values below.
+#
+# Deliberately runs on the native `nix` runner: the docker runner on asgard
+# cannot start containers at all ("error mounting sysfs to rootfs at /sys:
+# operation not permitted"), so a docker job fails about a second in. pi has to
+# be on the runner's PATH, which hostPackages in nixosContainer/forgejo-runner.nix
+# provides.
+on:
+  # Also re-run after a manual push, so hand-edited patches are rebased
+  # immediately. A successful rebase push re-triggers this, but that second run
+  # finds itself up to date and stops there.
+  push:
+    branches: [main]
+  # Mid-day UTC on purpose: nixos-builds.yml holds the single native-runner slot
+  # from 03:00 UTC for up to four hours, so an early-morning slot just queues.
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Set to 1 to rebase without pushing"
+        default: "0"
+
+concurrency:
+  group: rebase-upstream
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    name: Rebase onto the release tag
+    runs-on: nix
+    timeout-minutes: 30
+    env:
+      # ---- adjust for your upstream ----
+      UPSTREAM_URL: https://github.com/Acly/krita-ai-diffusion.git
+      UPSTREAM_TAG_PREFIX: v
+      # Optional: pin one exact tag instead of tracking the newest matching one.
+      # Set it when something else pins the same tag (see the README).
+      # UPSTREAM_TAG: v1.2.3
+      FORK_BRANCH: main
+      # ----------------------------------
+    steps:
+      - name: Check out the fork
+        uses: https://code.forgejo.org/actions/checkout@v5
+        with:
+          # The rebase needs our commits and the upstream tags, so full history.
+          fetch-depth: 0
+
+      - name: Rebase
+        shell: bash
+        env:
+          # Global secret, see the README.
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          PI_PROVIDER: opencode-go
+          PI_MODEL: deepseek-v4.1-flash
+          DRY_RUN: ${{ inputs.dry_run || '0' }}
+        run: |
+          set -euo pipefail
+          bash .forgejo/scripts/rebase-upstream.sh
