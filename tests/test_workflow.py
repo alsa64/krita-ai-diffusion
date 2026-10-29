@@ -315,6 +315,27 @@ def test_anima_lllite_control_workflow():
     assert not any(n["class_type"] == "ControlNetLoader" for n in w.root.values())
 
 
+def test_dynamic_cache_qwen2():
+    w = ComfyWorkflow()
+    models = ClientModels()
+    models.checkpoints["test_qwen21.safetensors"] = CheckpointInfo(
+        "test_qwen21.safetensors", Arch.qwen2
+    )
+    models.resources[resource_id(ResourceKind.text_encoder, Arch.qwen2, "qwen_3vl_8b")] = (
+        "qwen_3vl_8b.safetensors"
+    )
+    models.resources[resource_id(ResourceKind.vae, Arch.qwen2, "default")] = (
+        "qwen_image_2.1_vae.safetensors"
+    )
+    checkpoint = CheckpointInput(
+        "test_qwen21.safetensors", version=Arch.qwen2, dynamic_caching=True
+    )
+
+    workflow.load_checkpoint_with_lora(w, checkpoint, models)
+
+    assert any(node["class_type"] == "EasyCache" for node in w.root.values())
+
+
 def test_flux_inpaint_cfg_override(monkeypatch):
     checkpoint = CheckpointInput("flux.safetensors", version=Arch.flux, dynamic_caching=True)
     sampling = SamplingInput("euler", "normal", cfg_scale=7.0, total_steps=20)

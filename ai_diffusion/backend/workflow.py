@@ -181,7 +181,7 @@ def load_checkpoint_with_lora(w: ComfyWorkflow, checkpoint: CheckpointInput, mod
     if vae is None:
         vae = w.load_vae(models.for_arch(arch).vae)
 
-    support_fbc = arch in [Arch.flux, Arch.sd3] or arch.is_sdxl_like
+    support_fbc = arch in [Arch.flux, Arch.sd3, Arch.qwen2] or arch.is_sdxl_like
     if checkpoint.dynamic_caching and support_fbc:
         model = w.easy_cache(model, arch)
 
