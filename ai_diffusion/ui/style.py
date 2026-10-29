@@ -779,8 +779,8 @@ class StyleSettingsEditor(QWidget):
                 self._checkpoint_warning.setVisible(True)
 
     def _show_edit_style(self, style: Style):
-        arch = resolve_arch(style, root.connection.client_if_connected)
-        self._edit_style.visible = not arch.supports_edit
+        caps = root.active_model.capabilities_for(style)
+        self._edit_style.visible = "edit" not in caps
 
     def _setup_edit_style(self):
         style = self._style
@@ -791,7 +791,7 @@ class StyleSettingsEditor(QWidget):
         edit_styles.extend(
             (s.name, s.filename)
             for s in filter_supported_styles(Styles.list(), client)
-            if s != style and resolve_arch(s, client).supports_edit
+            if s != style and "edit" in root.active_model.capabilities_for(s)
         )
         self._edit_style.set_items(edit_styles)
 

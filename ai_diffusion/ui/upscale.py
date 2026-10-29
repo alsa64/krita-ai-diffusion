@@ -274,8 +274,7 @@ class UpscaleWidget(QWidget):
         )
 
     def _update_style(self):
-        arch = self.model.arch
-        if arch.is_edit:
+        if "edit" in self.model.capabilities:
             tooltip = _("Not supported for edit models")
             self.strength_slider.setEnabled(False)
             self.strength_slider.setToolTip(tooltip)

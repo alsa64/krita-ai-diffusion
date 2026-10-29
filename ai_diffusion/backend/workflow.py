@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Collection, Sequence
 from copy import copy
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
@@ -39,6 +40,7 @@ from .api import (
     WorkflowInput,
     WorkflowKind,
 )
+from .capabilities import resolve_capabilities
 from .client import ClientModels, ModelDict, resolve_arch
 from .comfy_workflow import (
     ComfyNode,
@@ -491,8 +493,10 @@ def apply_reference_conditioning(
     vae: Output,
     arch: Arch,
     tiled_vae: bool,
+    capabilities: Collection[str] | None = None,
 ):
-    if not arch.supports_edit:
+    can_edit = "edit_reference" in capabilities if capabilities is not None else arch.supports_edit
+    if not can_edit:
         return prompt, None
 
     extra_input = (c.image for c in cond.all_control if c.mode.is_ip_adapter)
@@ -535,6 +539,7 @@ def encode_prompt(
     regions: Output | None,
     image: Output | None = None,
     tiled_vae: bool = False,
+    capabilities: Collection[str] | None = None,
 ):
     """Runs text and image encoder (VLM) to produce embeddings from prompt and reference images.
     Returns positive/negative conditioning, and sometimes the VAE-encoded `image` for reuse.
@@ -558,7 +563,9 @@ def encode_prompt(
             positive = cond.positive.encode(w, clip, cond.style_prompt, ref_images)
             negative = cond.negative.encode(w, clip) if cond.negative else positive
             prompt = ConditioningOutput(positive, negative)
-            return apply_reference_conditioning(w, prompt, image, cond, vae, arch, tiled_vae)
+            return apply_reference_conditioning(
+                w, prompt, image, cond, vae, arch, tiled_vae, capabilities
+            )
 
     assert regions is not None
     positive = None
@@ -837,6 +844,7 @@ def scale_refine_and_decode(
     vae: Output,
     models: ModelDict,
     tiled_vae: bool,
+    capabilities: Collection[str] = (),
 ):
     """Handles scaling images from `initial` to `desired` resolution.
     If it is a substantial upscale, runs a high-res SD refinement pass.
@@ -863,7 +871,9 @@ def scale_refine_and_decode(
     upscale = w.scale_image(upscale, extent.desired)
     params = _highres_refine_sampler_params(sampling, extent.desired)
 
-    prompt, new_latent = encode_prompt(w, cond, clip, vae, regions, upscale, tiled_vae)
+    prompt, new_latent = encode_prompt(
+        w, cond, clip, vae, regions, upscale, tiled_vae, capabilities
+    )
     new_latent = new_latent or vae_encode(w, vae, upscale, tiled_vae)
     model, prompt = apply_control(w, model, prompt, cond.all_control, extent.desired, vae, models)
     result = w.sampler_custom_advanced(model, prompt, new_latent, arch, **params)
@@ -892,6 +902,7 @@ def generate(
     sampling: SamplingInput,
     misc: MiscParams,
     models: ModelDict,
+    capabilities: Collection[str] = (),
 ):
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
     model = apply_ip_adapter(w, model, cond.control, models)
@@ -899,12 +910,22 @@ def generate(
     model, regions = apply_attention_mask(w, model, cond, clip, extent.initial)
     model = apply_regional_ip_adapter(w, model, cond.regions, extent.initial, models)
     latent = w.empty_latent_image(extent.initial, models.arch, misc.batch_count)
-    prompt, _ = encode_prompt(w, cond, clip, vae, regions, None, checkpoint.tiled_vae)
+    prompt, _ = encode_prompt(w, cond, clip, vae, regions, None, checkpoint.tiled_vae, capabilities)
     model, prompt = apply_control(w, model, prompt, cond.all_control, extent.initial, vae, models)
     sample_params = _sampler_params(sampling, extent.initial)
     out_latent = w.sampler_custom_advanced(model, prompt, latent, models.arch, **sample_params)
     out_image = scale_refine_and_decode(
-        extent, w, cond, sampling, out_latent, model_orig, clip, vae, models, checkpoint.tiled_vae
+        extent,
+        w,
+        cond,
+        sampling,
+        out_latent,
+        model_orig,
+        clip,
+        vae,
+        models,
+        checkpoint.tiled_vae,
+        capabilities=capabilities,
     )
     out_image = w.nsfw_filter(out_image, sensitivity=misc.nsfw_filter)
     out_image = scale_to_target(extent, w, out_image, models)
@@ -960,6 +981,7 @@ def detect_inpaint(
     arch: Arch,
     cond: ConditioningInput,
     strength: float,
+    capabilities: Collection[str] | None = None,
 ):
     assert mode is not InpaintMode.automatic
     result = InpaintParams(mode, bounds)
@@ -985,7 +1007,11 @@ def detect_inpaint(
     is_ref_mode = mode in [InpaintMode.fill, InpaintMode.expand]
     result.use_reference = is_ref_mode and cond.positive == ""
 
-    if arch is Arch.sd15:
+    is_edit = "edit" in capabilities if capabilities is not None else arch.is_edit
+    if is_edit:
+        result.mode = InpaintMode.custom
+        result.fill = FillMode.none
+    elif arch is Arch.sd15:
         result.use_inpaint_model = strength > 0.5
         result.use_condition_mask = (
             mode is InpaintMode.add_object
@@ -996,9 +1022,6 @@ def detect_inpaint(
         result.use_inpaint_model = strength > 0.8
     elif arch in (Arch.flux, Arch.zimage, Arch.anima):
         result.use_inpaint_model = strength > 0.99
-    elif arch.is_edit:
-        result.mode = InpaintMode.custom
-        result.fill = FillMode.none
     return result
 
 
@@ -1036,6 +1059,7 @@ def inpaint(
     crop_upscale_extent: Extent,
     misc: MiscParams,
     models: ModelDict,
+    capabilities: Collection[str] = (),
 ):
     target_bounds = params.target_bounds
     extent = ScaledExtent.from_input(images.extent)  # for initial generation with large context
@@ -1083,7 +1107,9 @@ def inpaint(
 
     model = apply_ip_adapter(w, model, cond_base.control, models)
     model = apply_regional_ip_adapter(w, model, cond_base.regions, extent.initial, models)
-    prompt, latent = encode_prompt(w, cond_base, clip, vae, regions, in_image, checkpoint.tiled_vae)
+    prompt, latent = encode_prompt(
+        w, cond_base, clip, vae, regions, in_image, checkpoint.tiled_vae, capabilities
+    )
     model, prompt = apply_control(
         w, model, prompt, cond_base.all_control, extent.initial, vae, models
     )
@@ -1134,7 +1160,7 @@ def inpaint(
 
         model, regions = apply_attention_mask(w, model, cond_upscale, clip, shape)
         model = apply_regional_ip_adapter(w, model, cond_upscale.regions, shape, models)
-        prompt_up, _ = encode_prompt(w, cond_upscale, clip, vae, regions)
+        prompt_up, _ = encode_prompt(w, cond_upscale, clip, vae, regions, capabilities=capabilities)
 
         if params.use_inpaint_model and models.control.find(ControlMode.inpaint) is not None:
             hires_image = ImageOutput(images.hires_image)
@@ -1179,6 +1205,7 @@ def refine(
     sampling: SamplingInput,
     misc: MiscParams,
     models: ModelDict,
+    capabilities: Collection[str] = (),
 ):
     model, clip, vae = load_checkpoint_with_lora(w, checkpoint, models.all)
     model = apply_ip_adapter(w, model, cond.control, models)
@@ -1186,7 +1213,9 @@ def refine(
     model = apply_regional_ip_adapter(w, model, cond.regions, extent.initial, models)
     in_image = w.load_image(image, alpha=models.arch.supports_alpha)
     in_image = scale_to_initial(extent, w, in_image, models)
-    prompt, latent = encode_prompt(w, cond, clip, vae, regions, in_image, checkpoint.tiled_vae)
+    prompt, latent = encode_prompt(
+        w, cond, clip, vae, regions, in_image, checkpoint.tiled_vae, capabilities
+    )
     latent = latent or vae_encode(w, vae, in_image, checkpoint.tiled_vae)
     latent_batch = w.batch_latent(latent, misc.batch_count)
     latent_batch = setup_latent_layers(w, latent_batch, extent.desired, misc.layer_count)
@@ -1210,6 +1239,7 @@ def refine_region(
     inpaint: InpaintParams,
     misc: MiscParams,
     models: ModelDict,
+    capabilities: Collection[str] = (),
 ):
     extent = ScaledExtent.from_input(images.extent)
 
@@ -1226,7 +1256,9 @@ def refine_region(
     in_mask = apply_grow_feather(w, in_mask, inpaint)
     initial_mask = scale_to_initial(extent, w, in_mask, models, is_mask=True)
 
-    prompt, latent = encode_prompt(w, cond, clip, vae, regions, in_image, checkpoint.tiled_vae)
+    prompt, latent = encode_prompt(
+        w, cond, clip, vae, regions, in_image, checkpoint.tiled_vae, capabilities
+    )
 
     if inpaint.use_inpaint_model and models.control.find(ControlMode.inpaint) is not None:
         cond.control.append(inpaint_control(in_image, initial_mask, models.arch))
@@ -1248,7 +1280,17 @@ def refine_region(
         inpaint_model, prompt, latent, models.arch, **sampler_params
     )
     out_image = scale_refine_and_decode(
-        extent, w, cond, sampling, out_latent, model_orig, clip, vae, models, checkpoint.tiled_vae
+        extent,
+        w,
+        cond,
+        sampling,
+        out_latent,
+        model_orig,
+        clip,
+        vae,
+        models,
+        checkpoint.tiled_vae,
+        capabilities=capabilities,
     )
     out_image = w.color_match(out_image, in_image, initial_mask, misc.color_match)
     out_image = w.nsfw_filter(out_image, sensitivity=misc.nsfw_filter)
@@ -1708,10 +1750,16 @@ _control_instructions = {
 }
 
 
-def build_instructions(cond: ConditioningInput, arch: Arch, inpaint: InpaintMode | None):
+def build_instructions(
+    cond: ConditioningInput,
+    arch: Arch,
+    inpaint: InpaintMode | None,
+    capabilities: Collection[str] | None = None,
+):
     instructions = ""
 
-    if not cond.edit_reference and arch.supports_edit:
+    can_edit = "edit_reference" in capabilities if capabilities is not None else arch.supports_edit
+    if not cond.edit_reference and can_edit:
         match inpaint, arch:
             case InpaintMode.fill | InpaintMode.expand, Arch.flux2_4b | Arch.qwen2:
                 instructions += "Fill the green spaces according to the image.\n"
@@ -1748,6 +1796,7 @@ def prepare_prompts(
     ref_layers: dict[str, int] | None = None,
     files: FileLibrary | None = None,
     is_live=False,
+    capabilities: Collection[str] | None = None,
 ):
     cond = copy(cond)
     files = files or FileLibrary.instance()
@@ -1769,7 +1818,7 @@ def prepare_prompts(
     cond.positive, extra_loras = extract_loras(cond.positive, files.loras)
     cond.positive = replace_layers(cond.positive, ref_layers, layer_replace)
     cond.positive += _collect_lora_triggers(models.loras, files)
-    cond.positive = build_instructions(cond, arch, inpaint)
+    cond.positive = build_instructions(cond, arch, inpaint, capabilities)
     if cond.positive == "" and inpaint is InpaintMode.remove_object:
         cond.positive = "background scenery"
     meta["prompt_final"] = cond.positive
@@ -1838,9 +1887,10 @@ def prepare(
     i.models.dynamic_caching = perf.dynamic_caching
     i.models.tiled_vae = perf.tiled_vae
     arch = i.models.version = resolve_arch(style, models)
+    capabilities = tuple(resolve_capabilities(i.models.checkpoint, arch))
 
     _check_server_has_models(i.models, i.conditioning.regions, models, files, style.name)
-    _check_inpaint_model(inpaint, arch, models)
+    _check_inpaint_model(inpaint, arch, models, capabilities)
 
     model_set = models.for_arch(arch)
     has_ip_adapter = model_set.ip_adapter.find(ControlMode.reference) is not None
@@ -1852,18 +1902,23 @@ def prepare(
     if kind is WorkflowKind.generate:
         assert isinstance(canvas, Extent)
         i.images, i.batch_count = resolution.prepare_extent(
-            canvas, arch, ensure(style), perf, downscale=not is_live
+            canvas, arch, ensure(style), perf, downscale=not is_live, capabilities=capabilities
         )
         downscale_all_control_images(i.conditioning, canvas, i.images.extent.desired)
 
     elif kind is WorkflowKind.inpaint:
         assert isinstance(canvas, Image) and mask and inpaint and style
         i.images, _ = resolution.prepare_image(
-            canvas, arch, style, perf, inpaint=inpaint.use_inpaint_model
+            canvas,
+            arch,
+            style,
+            perf,
+            inpaint=inpaint.use_inpaint_model,
+            capabilities=capabilities,
         )
         i.images.hires_mask = mask.to_image(canvas.extent)
         upscale_extent, _ = resolution.prepare_extent(
-            mask.bounds.extent, arch, style, perf, downscale=False
+            mask.bounds.extent, arch, style, perf, downscale=False, capabilities=capabilities
         )
         i.inpaint = InpaintParams.clamped(inpaint)
         i.inpaint.use_reference = inpaint.use_reference and has_ip_adapter
@@ -1919,10 +1974,9 @@ def prepare(
 
     i.batch_count = 1 if is_live else i.batch_count
     i.images.layer_count = layer_count if arch is Arch.qwen_l else 1
+    is_edit = "edit" in capabilities
     i.color_match = (
-        1.0
-        if (settings.color_match_edit if arch.is_edit else settings.color_match_generation)
-        else 0.0
+        1.0 if (settings.color_match_edit if is_edit else settings.color_match_generation) else 0.0
     )
     i.nsfw_filter = settings.nsfw_filter
     return i
@@ -1990,6 +2044,7 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
             ensure(i.sampling),
             misc,
             models.for_arch(ensure(i.models).version),
+            i.capabilities,
         )
     elif i.kind is WorkflowKind.inpaint:
         return inpaint(
@@ -2002,6 +2057,7 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
             ensure(i.crop_upscale_extent),
             misc,
             models.for_arch(ensure(i.models).version),
+            i.capabilities,
         )
     elif i.kind is WorkflowKind.refine:
         return refine(
@@ -2013,6 +2069,7 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
             ensure(i.sampling),
             misc,
             models.for_arch(ensure(i.models).version),
+            i.capabilities,
         )
     elif i.kind is WorkflowKind.refine_region:
         return refine_region(
@@ -2024,6 +2081,7 @@ def create(i: WorkflowInput, models: ClientModels, comfy_mode=ComfyRunMode.serve
             ensure(i.inpaint),
             misc,
             models.for_arch(ensure(i.models).version),
+            i.capabilities,
         )
     elif i.kind is WorkflowKind.upscale_simple:
         return upscale_simple(workflow, i.image, ensure(i.upscale).model, i.upscale_factor)
@@ -2145,10 +2203,15 @@ def _check_server_has_models(
         )
 
 
-def _check_inpaint_model(inpaint: InpaintParams | None, arch: Arch, models: ClientModels):
+def _check_inpaint_model(
+    inpaint: InpaintParams | None,
+    arch: Arch,
+    models: ClientModels,
+    capabilities: Sequence[str] = (),
+):
     if inpaint and inpaint.use_inpaint_model:
         res_id: ResourceId | None = None
-        if arch.has_controlnet_inpaint:
+        if "controlnet_inpaint" in capabilities or arch.has_controlnet_inpaint:
             if arch in (Arch.flux, Arch.zimage):
                 return  # Optional for now
             if models.for_arch(arch).control.find(ControlMode.inpaint) is None:

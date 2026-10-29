@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 
 from .. import eventloop, util
 from ..backend import network, resources
+from ..backend.capabilities import capability_labels, feature_capabilities
 from ..backend.client import ClientModels
 from ..backend.model_metadata import ModelMetadata, metadata_store, model_types
 from ..backend.resources import Arch, ResourceId, ResourceKind
@@ -166,9 +167,9 @@ class MetadataDialog(QDialog):
         self._description.setFixedHeight(80)
         layout.addRow(_("Description"), self._description)
 
-        self._capabilities = metadata.capabilities
-        for capability in ["edit", "inpaint", "outpaint", "controlnet", "style"]:
-            check = QCheckBox(capability)
+        self._capabilities = list(metadata.capabilities)
+        for capability in feature_capabilities:
+            check = QCheckBox(capability_labels.get(capability, capability))
             check.setChecked(capability in self._capabilities)
             check.toggled.connect(self._toggle_capability(capability))
             layout.addRow("", check)

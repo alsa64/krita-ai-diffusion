@@ -183,7 +183,7 @@ class ControlLayer(QObject, ObservableProperties):
             raise PluginError("Reference image used by control layer has been removed")
         image = ref.image
         if self.mode.is_ip_adapter:
-            if self._model.arch.supports_edit:
+            if "edit_reference" in self._model.capabilities:
                 if image.extent.height > extent.height:
                     w = (image.extent.width * extent.height) // image.extent.height
                     image = Image.scale(image, Extent(w, extent.height))
@@ -205,7 +205,7 @@ class ControlLayer(QObject, ObservableProperties):
             image.make_opaque(background=Qt.GlobalColor.white)
 
         if self.mode.is_ip_adapter:
-            if self._model.arch.supports_edit:
+            if "edit_reference" in self._model.capabilities:
                 if image.extent.height > extent.height:
                     w = (image.extent.width * extent.height) // image.extent.height
                     image = Image.scale(image, Extent(w, extent.height))
@@ -284,7 +284,7 @@ class ControlLayer(QObject, ObservableProperties):
                     self.error_text = _("The server is missing the ClipVision model") + f" {search}"
                     is_supported = False
 
-            if self.mode.is_ip_adapter and models.arch.supports_edit:
+            if self.mode.is_ip_adapter and "edit_reference" in self._model.capabilities:
                 is_supported = True  # Reference images are merged into the conditioning context
             elif self.mode.is_ip_adapter and models.ip_adapter.find(self.mode) is None:
                 search_path = resources.search_path(ResourceKind.ip_adapter, models.arch, self.mode)
@@ -297,7 +297,7 @@ class ControlLayer(QObject, ObservableProperties):
                 if not client.features.ip_adapter:
                     self.error_text = _("IP-Adapter is not supported by this GPU")
                 is_supported = False
-            elif self.mode.is_control_net and models.arch.supports_edit:
+            elif self.mode.is_control_net and "edit_reference" in self._model.capabilities:
                 is_supported = self.mode.can_substitute_instruction(models.arch)
                 if not is_supported:
                     self.error_text = _("Not supported for") + f" {models.arch.value}"
@@ -363,7 +363,7 @@ class ControlLayerList(QObject):
         if layer is None:  # shouldn't be possible, Krita doesn't allow removing all non-mask layers
             log.warning("Trying to add control layer, but document has no suitable layer")
             return
-        mode = ControlMode.reference if self._model.arch.is_edit else self._last_mode
+        mode = ControlMode.reference if "edit" in self._model.capabilities else self._last_mode
         control = ControlLayer(self._model, mode, layer.id, len(self._layers))
         control.mode_changed.connect(self._update_last_mode)
         self._layers.append(control)

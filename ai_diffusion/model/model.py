@@ -33,6 +33,7 @@ from ..backend.api import (
     WorkflowInput,
     WorkflowKind,
 )
+from ..backend.capabilities import resolve_capabilities
 from ..backend.client import (
     Client,
     ClientEvent,
@@ -281,8 +282,15 @@ class DocumentModel(QObject, ObservableProperties):
 
         original_conditioning = conditioning
         inpaint_instruction = inpaint_mode if is_one(strength) else None
+        capabilities = self.capabilities_for(self.active_style)
         conditioning, loras, prompt_meta = workflow.prepare_prompts(
-            conditioning, self.style, seed, arch, inpaint_instruction, ref_layers
+            conditioning,
+            self.style,
+            seed,
+            arch,
+            inpaint_instruction,
+            ref_layers,
+            capabilities=capabilities,
         )
 
         if mask is not None or workflow_kind is WorkflowKind.refine:
@@ -316,7 +324,7 @@ class DocumentModel(QObject, ObservableProperties):
                 inpaint = self.inpaint.get_params(mask, self.is_editing)
             else:
                 inpaint = workflow.detect_inpaint(
-                    inpaint_mode, mask.bounds, arch, conditioning, strength
+                    inpaint_mode, mask.bounds, arch, conditioning, strength, capabilities
                 )
             inpaint = calc_selection_pre_process(inpaint, selection_bounds, smod)
         else:
@@ -428,7 +436,7 @@ class DocumentModel(QObject, ObservableProperties):
 
         bounds = Bounds(0, 0, *self._doc.extent)
         sys_prompt = "4k uhd"
-        if self.arch.is_edit:
+        if self.is_edit_model:
             sys_prompt = "Enhance image quality. Preserve original content."
 
         if params.use_prompt and not dryrun:
@@ -1189,6 +1197,28 @@ class DocumentModel(QObject, ObservableProperties):
     def arch(self):
         return resolve_arch(self.active_style, self._connection.client_if_connected)
 
+    def capabilities_for(self, style: Style | None = None) -> frozenset[str]:
+        style = style or self.active_style
+        arch = resolve_arch(style, self._connection.client_if_connected)
+        checkpoint = ""
+        if client := self._connection.client_if_connected:
+            checkpoint = style.preferred_checkpoint(client.models.checkpoints)
+        elif style.checkpoints:
+            checkpoint = style.checkpoints[0]
+        return resolve_capabilities(checkpoint, arch)
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        return self.capabilities_for()
+
+    @property
+    def is_edit_model(self):
+        return "edit" in self.capabilities
+
+    @property
+    def can_use_reference(self):
+        return "edit_reference" in self.capabilities
+
     @property
     def history(self):
         return (job for job in self.jobs if job.state is JobState.finished)
@@ -1222,8 +1252,7 @@ class DocumentModel(QObject, ObservableProperties):
 
     @property
     def edit_style(self) -> Style | None:
-        style_arch = resolve_arch(self.style, self._connection.client_if_connected)
-        if style_arch.supports_edit:
+        if "edit_reference" in self.capabilities_for(self.style):
             return self.style
         if style_id := self.style.linked_edit_style:
             if style := Styles.list().find(style_id):
@@ -1237,12 +1266,11 @@ class DocumentModel(QObject, ObservableProperties):
 
     @property
     def can_toggle_edit(self):
-        style_arch = resolve_arch(self.style, self._connection.client_if_connected)
-        return not style_arch.is_edit and self.can_edit
+        return "edit" not in self.capabilities_for(self.style) and self.can_edit
 
     @property
     def is_editing(self):
-        return self.arch.is_edit or (self.can_edit and self.edit_mode)
+        return self.is_edit_model or (self.can_edit and self.edit_mode)
 
     @property
     def is_region_only(self):
@@ -1370,7 +1398,7 @@ class UpscaleWorkspace(QObject, ObservableProperties):
             use_diffusion=self.use_diffusion,
             unblur_strength=self.unblur_strength,
             use_prompt=self.use_prompt,
-            strength=1.0 if model.arch.is_edit else self.strength,
+            strength=1.0 if "edit" in model.capabilities else self.strength,
             target_extent=self.target_extent,
             seed=model.seed if model.fixed_seed else workflow.generate_seed(),
         )

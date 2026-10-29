@@ -282,7 +282,7 @@ class ControlWidget(QWidget):
         is_small = self.width() < 420
         is_pose = self._control.mode is ControlMode.pose
         is_segmentation = self._control.mode is ControlMode.segmentation
-        is_edit = root.active_model.arch.supports_edit
+        is_edit = "edit_reference" in root.active_model.capabilities
 
         def controls():
             self.layer_select.setVisible(self._control.is_supported)

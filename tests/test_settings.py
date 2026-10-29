@@ -761,6 +761,7 @@ class _FakeModel(QObject):
         super().__init__()
         layer = _FakeLayer()
         self.arch = arch
+        self.capabilities: frozenset[str] = frozenset()
         self.layers = _FakeLayerStore(layer)
         self.jobs = _FakeJobs()
         self.style = Style(Path("style.json"))

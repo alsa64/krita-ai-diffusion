@@ -186,6 +186,7 @@ class CustomWorkflowInput:
     positive_evaluated: str = ""
     negative_evaluated: str = ""
     models: CheckpointInput | None = None
+    capabilities: tuple[str, ...] = ()
     sampling: SamplingInput | None = None
 
 
@@ -194,6 +195,7 @@ class WorkflowInput:
     kind: WorkflowKind
     images: ImageInput | None = None
     models: CheckpointInput | None = None
+    capabilities: tuple[str, ...] = ()
     sampling: SamplingInput | None = None
     conditioning: ConditioningInput | None = None
     inpaint: InpaintParams | None = None

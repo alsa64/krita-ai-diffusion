@@ -183,39 +183,39 @@ class Arch(Enum):
 
     @property
     def has_controlnet_inpaint(self):
-        return self in (Arch.sd15, Arch.flux, Arch.zimage, Arch.qwen, Arch.anima)
+        return "controlnet_inpaint" in default_capabilities(self)
 
     @property
     def supports_regions(self):
-        return self in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v, Arch.anima]
+        return "regions" in default_capabilities(self)
 
     @property
     def supports_lcm(self):
-        return self in [Arch.sd15, Arch.sdxl]
+        return "lcm" in default_capabilities(self)
 
     @property
     def supports_clip_skip(self):
-        return self in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v]
+        return "clip_skip" in default_capabilities(self)
 
     @property
     def supports_attention_guidance(self):
-        return self in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v, Arch.anima]
+        return "attention_guidance" in default_capabilities(self)
 
     @property
     def supports_cfg(self):
-        return self not in [Arch.flux, Arch.flux_k]
+        return "cfg" in default_capabilities(self)
 
     @property
     def supports_alpha(self):
-        return self is Arch.qwen2
+        return "alpha" in default_capabilities(self)
 
     @property
     def is_edit(self):  # edit models make changes to input images
-        return self in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.moss_e]
+        return "edit" in default_capabilities(self)
 
     @property
     def supports_edit(self):  # includes text-to-image models that can also edit
-        return self.is_edit or self.is_flux2 or self is Arch.qwen2
+        return "edit_reference" in default_capabilities(self)
 
     @property
     def is_sdxl_like(self):
@@ -313,6 +313,32 @@ class ResourceKind(Enum):
     embedding = "Textual Embedding"
     preprocessor = "Preprocessor"
     node = "custom node"
+
+
+def default_capabilities(arch: Arch) -> frozenset[str]:
+    """Capabilities of an architecture when the model has no metadata sidecar."""
+    result = set()
+    if arch in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.moss_e]:
+        result.add("edit")
+    if arch in [Arch.flux_k, Arch.qwen_e, Arch.qwen_e_p, Arch.qwen_l, Arch.moss_e] or arch in [
+        Arch.flux2_4b,
+        Arch.flux2_9b,
+        Arch.qwen2,
+    ]:
+        result.add("edit_reference")
+    if arch in (Arch.sd15, Arch.flux, Arch.zimage, Arch.qwen, Arch.anima):
+        result.add("controlnet_inpaint")
+    if arch in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v, Arch.anima]:
+        result.add("regions")
+    if arch is Arch.qwen2:
+        result.add("alpha")
+    if arch not in [Arch.flux, Arch.flux_k]:
+        result.add("cfg")
+    if arch in [Arch.sd15, Arch.sdxl, Arch.illu, Arch.illu_v]:
+        result.update(["clip_skip", "attention_guidance"])
+    if arch in [Arch.sd15, Arch.sdxl]:
+        result.add("lcm")
+    return frozenset(result)
 
 
 class UpscalerName(Enum):

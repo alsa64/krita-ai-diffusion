@@ -954,7 +954,7 @@ class GenerationWidget(QWidget):
     def show_inpaint_menu(self):
         width = self.generate_button.width() + self.inpaint_mode_button.width()
         pos = QPoint(0, self.generate_button.height())
-        if not self.model.edit_mode and self.model.arch.is_edit:
+        if not self.model.edit_mode and "edit" in self.model.capabilities:
             menu = self.edit_menu
         elif is_one(self.model.strength):
             if self.model.is_region_only:

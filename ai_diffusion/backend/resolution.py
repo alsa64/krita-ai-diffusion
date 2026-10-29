@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 from enum import Enum
 from typing import NamedTuple, overload
 
@@ -188,13 +189,15 @@ def prepare_diffusion_input(
     perf: PerformanceSettings,
     downscale=True,
     inpaint=False,
+    capabilities: Collection[str] | None = None,
 ):
     # Take settings into account to compute the desired resolution for diffusion.
     desired = apply_resolution_settings(extent, perf)
     mult = diffusion_multiple(arch)
 
     # The checkpoint may require a different resolution than what is requested.
-    if arch.is_edit:
+    is_edit = "edit" in capabilities if capabilities is not None else arch.is_edit
+    if is_edit:
         downscale = False  # Never use 2-pass generation for edit models
 
     min_size, max_size, min_scale, max_scale = CheckpointResolution.compute(
@@ -234,17 +237,30 @@ def prepare_diffusion_input(
 
 
 def prepare_extent(
-    extent: Extent, arch: Arch, style: Style, perf: PerformanceSettings, downscale=True
+    extent: Extent,
+    arch: Arch,
+    style: Style,
+    perf: PerformanceSettings,
+    downscale=True,
+    capabilities: Collection[str] | None = None,
 ):
-    scaled, _, batch = prepare_diffusion_input(extent, None, arch, style, perf, downscale)
+    scaled, _, batch = prepare_diffusion_input(
+        extent, None, arch, style, perf, downscale, capabilities=capabilities
+    )
     return ImageInput(scaled.as_input), batch
 
 
 def prepare_image(
-    image: Image, arch: Arch, style: Style, perf: PerformanceSettings, downscale=True, inpaint=False
+    image: Image,
+    arch: Arch,
+    style: Style,
+    perf: PerformanceSettings,
+    downscale=True,
+    inpaint=False,
+    capabilities: Collection[str] | None = None,
 ):
     scaled, out_image, batch = prepare_diffusion_input(
-        image.extent, image, arch, style, perf, downscale, inpaint
+        image.extent, image, arch, style, perf, downscale, inpaint, capabilities
     )
     assert out_image is not None
     return ImageInput(scaled.as_input, out_image), batch

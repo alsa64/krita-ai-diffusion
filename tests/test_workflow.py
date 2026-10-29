@@ -289,6 +289,21 @@ def test_inpaint_params():
     assert g.fill is FillMode.blur and g.use_inpaint_model
 
 
+def test_inpaint_uses_model_capabilities():
+    bounds = Bounds(0, 0, 100, 100)
+    cond = ConditioningInput("prompt")
+
+    # A user can mark any model as an edit model via metadata
+    edit = detect_inpaint(InpaintMode.fill, bounds, Arch.sd15, cond, 1.0, capabilities={"edit"})
+    assert edit.mode is InpaintMode.custom and edit.fill is FillMode.none
+
+    # ... and can turn it off for an architecture that is an edit model by default
+    generate = detect_inpaint(
+        InpaintMode.fill, bounds, Arch.qwen_e_p, cond, 1.0, capabilities=set()
+    )
+    assert generate.mode is not InpaintMode.custom
+
+
 def test_anima_lllite_control_workflow():
     w = ComfyWorkflow()
     models = ClientModels()
