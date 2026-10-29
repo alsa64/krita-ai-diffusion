@@ -10,6 +10,12 @@
 # Environment:
 #   UPSTREAM_URL       git URL of the repository being forked     (required
 #                      unless an `upstream` remote already exists)
+#   UPSTREAM_REF       upstream branch to track instead of release tags, e.g.
+#                      main. The base becomes that branch's tip on every run, so
+#                      the fork follows upstream commit by commit. Use it when
+#                      the fork has to match upstream exactly (development
+#                      forks, builds consumed at HEAD) rather than ride on
+#                      released tags. Overrides the tag settings below.
 #   UPSTREAM_TAG       exact release tag to use as the base instead of the
 #                      newest one. Set it when something else pins the same tag
 #                      - a distro package whose dependency store is hashed, for
@@ -40,6 +46,8 @@ UPSTREAM_URL="${UPSTREAM_URL:-}"
 UPSTREAM_TAG_PREFIXES="${UPSTREAM_TAG_PREFIXES:-${UPSTREAM_TAG_PREFIX:-v}}"
 # Pin the base to one exact tag. Empty means track the newest matching tag.
 UPSTREAM_TAG="${UPSTREAM_TAG:-}"
+# Track a branch instead of tags. Non-empty wins over both tag settings.
+UPSTREAM_REF="${UPSTREAM_REF:-}"
 FORK_BRANCH="${FORK_BRANCH:-main}"
 PI_PROVIDER="${PI_PROVIDER:-opencode-go}"
 PI_MODEL="${PI_MODEL:-deepseek-v4.1-flash}"
@@ -88,35 +96,51 @@ git config user.name "$BOT_NAME"
 git config user.email "$BOT_EMAIL"
 git config rerere.enabled true
 
-log "Fetching tags for: $(tag_prefixes | tr '\n' ' ')..."
+if [ -n "$UPSTREAM_REF" ]; then
+  log "Fetching branch ${UPSTREAM_REF} from ${UPSTREAM_REMOTE}..."
+else
+  log "Fetching tags for: $(tag_prefixes | tr '\n' ' ')..."
+fi
 if ! git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
   [ -n "$UPSTREAM_URL" ] ||
     die "Remote ${UPSTREAM_REMOTE} does not exist and UPSTREAM_URL is unset."
   git remote add "$UPSTREAM_REMOTE" "$UPSTREAM_URL"
 fi
-while IFS= read -r prefix; do
+if [ -n "$UPSTREAM_REF" ]; then
   git fetch --no-tags "$UPSTREAM_REMOTE" \
-    "+refs/tags/${prefix}*:refs/tags/${prefix}*"
-done < <(tag_prefixes)
-# A pinned tag need not match any prefix, so fetch it by name too.
-if [ -n "$UPSTREAM_TAG" ]; then
-  git fetch --no-tags "$UPSTREAM_REMOTE" \
-    "+refs/tags/${UPSTREAM_TAG}:refs/tags/${UPSTREAM_TAG}"
+    "+refs/heads/${UPSTREAM_REF}:refs/remotes/${UPSTREAM_REMOTE}/${UPSTREAM_REF}"
+else
+  while IFS= read -r prefix; do
+    git fetch --no-tags "$UPSTREAM_REMOTE" \
+      "+refs/tags/${prefix}*:refs/tags/${prefix}*"
+  done < <(tag_prefixes)
+  # A pinned tag need not match any prefix, so fetch it by name too.
+  if [ -n "$UPSTREAM_TAG" ]; then
+    git fetch --no-tags "$UPSTREAM_REMOTE" \
+      "+refs/tags/${UPSTREAM_TAG}:refs/tags/${UPSTREAM_TAG}"
+  fi
 fi
 git fetch --no-tags origin "$FORK_BRANCH"
 
-if [ -n "$UPSTREAM_TAG" ]; then
+if [ -n "$UPSTREAM_REF" ]; then
+  TARGET_TAG="${UPSTREAM_REMOTE}/${UPSTREAM_REF}"
+  UPSTREAM_SHA="$(git rev-parse "${TARGET_TAG}^{commit}")" ||
+    die "Upstream branch ${UPSTREAM_REF} not found on ${UPSTREAM_REMOTE}."
+  log "Base is ${UPSTREAM_REF} (${UPSTREAM_SHA:0:12})"
+elif [ -n "$UPSTREAM_TAG" ]; then
   TARGET_TAG="$UPSTREAM_TAG"
   git rev-parse --verify --quiet "refs/tags/${TARGET_TAG}^{commit}" >/dev/null ||
     die "Pinned UPSTREAM_TAG ${TARGET_TAG} not found on ${UPSTREAM_REMOTE}."
+  UPSTREAM_SHA="$(git rev-parse "${TARGET_TAG}^{commit}")"
+  log "Base is ${TARGET_TAG} (${UPSTREAM_SHA:0:12})"
 else
   TARGET_TAG="$(newest_tag)"
   [ -n "$TARGET_TAG" ] ||
     die "No tag matching $(tag_prefixes | tr '\n' ' ') found on ${UPSTREAM_REMOTE}."
   log "Newest release is ${TARGET_TAG}"
+  UPSTREAM_SHA="$(git rev-parse "${TARGET_TAG}^{commit}")"
+  log "Base is ${TARGET_TAG} (${UPSTREAM_SHA:0:12})"
 fi
-UPSTREAM_SHA="$(git rev-parse "${TARGET_TAG}^{commit}")"
-log "Base is ${TARGET_TAG} (${UPSTREAM_SHA:0:12})"
 
 git checkout -B "$FORK_BRANCH" "origin/$FORK_BRANCH"
 
@@ -206,8 +230,10 @@ PROMPT
   log "Rebase completed with pi assistance after ${attempt} round(s)."
 fi
 
-# Only meaningful when tracking: a pinned base stays the base whatever releases.
-if [ -z "$UPSTREAM_TAG" ] && [ "$(newest_tag)" != "$TARGET_TAG" ]; then
+# Only meaningful when tracking tags: a pinned base stays the base whatever
+# releases, and a branch base is simply the branch as of this run - moving on
+# while we rebase is what the next run is for.
+if [ -z "$UPSTREAM_REF" ] && [ -z "$UPSTREAM_TAG" ] && [ "$(newest_tag)" != "$TARGET_TAG" ]; then
   die "A newer release tag appeared while we were rebasing; leaving the fork untouched for the next run."
 fi
 

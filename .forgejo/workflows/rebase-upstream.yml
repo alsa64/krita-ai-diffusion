@@ -37,17 +37,16 @@ jobs:
     env:
       # ---- adjust for your upstream ----
       UPSTREAM_URL: https://github.com/Acly/krita-ai-diffusion.git
-      UPSTREAM_TAG_PREFIX: v
-      # Optional: pin one exact tag instead of tracking the newest matching one.
-      # Set it when something else pins the same tag (see the README).
-      # UPSTREAM_TAG: v1.2.3
+      # Follow upstream's main branch: every run rebases our patches onto its
+      # latest commit instead of the newest release tag.
+      UPSTREAM_REF: main
       FORK_BRANCH: main
       # ----------------------------------
     steps:
       - name: Check out the fork
         uses: https://code.forgejo.org/actions/checkout@v5
         with:
-          # The rebase needs our commits and the upstream tags, so full history.
+          # The rebase needs our commits and upstream history, so full depth.
           fetch-depth: 0
 
       - name: Rebase
